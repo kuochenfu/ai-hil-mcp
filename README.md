@@ -267,7 +267,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 
 | Date | Milestone |
 |------|-----------|
-| [2026-03-19](doc/2026-03-19.md) | Phase 1 complete — Serial MCP, Build & Flash MCP, hardware-tested on STM32WL55 |
+| [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
 
 ---
 
