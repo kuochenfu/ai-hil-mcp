@@ -26,12 +26,24 @@ def list_serial_ports() -> str:
 
 
 @mcp.tool()
-def read_serial_log(port: str, baud: int = 115200, lines: int = 50) -> str:
-    """Read last N lines from a serial port. Auto-flags anomalies like HardFault, Panic, Watchdog Reset."""
+def read_serial_log(port: str, baud: int = 115200, lines: int = 50, timeout_s: int = 8) -> str:
+    """
+    Read up to N lines from a serial port within a time window. Auto-flags anomalies
+    like HardFault, Panic, Watchdog Reset. Reads for up to timeout_s seconds so it
+    catches output that arrives in bursts (e.g. after boot or a radio event).
+
+    Args:
+        port: Serial port path (e.g. /dev/tty.usbmodem1303).
+        baud: Baud rate. Default: 115200.
+        lines: Maximum number of lines to collect. Default: 50.
+        timeout_s: Total read window in seconds. Default: 8.
+    """
+    import time
     try:
         ser = serial.Serial(port, baud, timeout=1)
         buffer = []
-        for _ in range(lines):
+        deadline = time.time() + timeout_s
+        while time.time() < deadline and len(buffer) < lines:
             line = ser.readline().decode(errors="replace").strip()
             if line:
                 buffer.append(line)
