@@ -16,58 +16,91 @@ def _extract_errors(text: str, keyword: str = "error:") -> list[str]:
     return [l.strip() for l in text.splitlines() if keyword.lower() in l.lower()]
 
 
-def _find_elf(build_dir: str) -> str | None:
-    matches = glob.glob(os.path.join(build_dir, "**", "*.elf"), recursive=True)
-    return matches[0] if matches else None
+def _find_elfs(search_root: str) -> list[str]:
+    return glob.glob(os.path.join(search_root, "**", "*.elf"), recursive=True)
 
 
 @mcp.tool()
 def build_firmware(
     project_path: str,
-    toolchain_file: str,
+    preset: str = "",
+    toolchain_file: str = "",
     build_dir: str = "build",
     build_type: str = "Debug",
 ) -> str:
     """
     Configure (CMake + Ninja) and build a firmware project.
+    Supports both CMakePresets.json (preferred) and manual toolchain file.
     Handles both fresh configure and incremental builds.
     Returns a semantic summary of success or failure with key error lines.
 
     Args:
         project_path: Absolute path to the CMake project root (where CMakeLists.txt lives).
-        toolchain_file: Absolute path to the CMake toolchain file (e.g. arm-none-eabi toolchain).
-        build_dir: Build output directory name, relative to project_path. Default: "build".
-        build_type: CMake build type — Debug or Release. Default: Debug.
+        preset: CMake preset name from CMakePresets.json (e.g. "Debug", "Release").
+                If provided, toolchain_file/build_dir/build_type are ignored.
+        toolchain_file: Absolute path to the CMake toolchain file. Used only when no preset.
+        build_dir: Build output directory, relative to project_path. Used only when no preset.
+        build_type: CMake build type (Debug or Release). Used only when no preset.
     """
-    build_path = os.path.join(project_path, build_dir)
-    cmake_cache = os.path.join(build_path, "CMakeCache.txt")
+    if preset:
+        # Preset-based workflow
+        presets_file = os.path.join(project_path, "CMakePresets.json")
+        if not os.path.exists(presets_file):
+            return f"ERROR: CMakePresets.json not found in {project_path}"
 
-    # Configure if no cache exists yet
-    if not os.path.exists(cmake_cache):
-        code, out, err = _run([
-            "cmake",
-            "-B", build_path,
-            "-G", "Ninja",
-            f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}",
-            f"-DCMAKE_BUILD_TYPE={build_type}",
-            project_path,
-        ])
-        if code != 0:
-            errors = _extract_errors(err) or _extract_errors(out) or err.splitlines()[-5:]
-            return "Configure FAILED. Key errors:\n" + "\n".join(errors[:10])
+        # Determine build dir from preset (binaryDir pattern: build/<preset>)
+        build_path = os.path.join(project_path, "build", preset)
+        cmake_cache = os.path.join(build_path, "CMakeCache.txt")
 
-    # Build
-    code, out, err = _run(["cmake", "--build", build_path, "--", "-j4"], timeout=180)
+        if not os.path.exists(cmake_cache):
+            code, out, err = _run(
+                ["cmake", "--preset", preset], cwd=project_path
+            )
+            if code != 0:
+                errors = _extract_errors(err) or _extract_errors(out) or err.splitlines()[-5:]
+                return "Configure FAILED. Key errors:\n" + "\n".join(errors[:10])
+
+        code, out, err = _run(
+            ["cmake", "--build", "--preset", preset], cwd=project_path, timeout=180
+        )
+    else:
+        # Manual toolchain workflow
+        if not toolchain_file:
+            return "ERROR: Provide either a preset name or a toolchain_file path."
+        build_path = os.path.join(project_path, build_dir)
+        cmake_cache = os.path.join(build_path, "CMakeCache.txt")
+
+        if not os.path.exists(cmake_cache):
+            code, out, err = _run([
+                "cmake",
+                "-B", build_path,
+                "-G", "Ninja",
+                f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}",
+                f"-DCMAKE_BUILD_TYPE={build_type}",
+                project_path,
+            ])
+            if code != 0:
+                errors = _extract_errors(err) or _extract_errors(out) or err.splitlines()[-5:]
+                return "Configure FAILED. Key errors:\n" + "\n".join(errors[:10])
+
+        code, out, err = _run(
+            ["cmake", "--build", build_path, "--", "-j4"], timeout=180
+        )
+
     if code != 0:
         errors = _extract_errors(err) or _extract_errors(out) or err.splitlines()[-10:]
         return "Build FAILED. Key errors:\n" + "\n".join(errors[:15])
 
-    elf = _find_elf(build_path)
+    elfs = _find_elfs(project_path)
     size_info = ""
-    if elf:
-        scode, sout, _ = _run(["arm-none-eabi-size", elf])
-        if scode == 0:
-            size_info = f"\nBinary size:\n{sout.strip()}"
+    if elfs:
+        lines = []
+        for elf in sorted(elfs):
+            scode, sout, _ = _run(["arm-none-eabi-size", elf])
+            if scode == 0:
+                lines.append(f"{os.path.basename(elf)}:\n{sout.strip()}")
+        if lines:
+            size_info = "\nBinary sizes:\n" + "\n\n".join(lines)
 
     return f"Build SUCCESS.{size_info}"
 
@@ -97,14 +130,15 @@ def get_build_size(project_path: str, build_dir: str = "build") -> str:
         project_path: Absolute path to the CMake project root.
         build_dir: Build directory name. Default: "build".
     """
-    build_path = os.path.join(project_path, build_dir)
-    elf = _find_elf(build_path)
-    if not elf:
-        return f"No .elf file found in {build_path}. Run build_firmware first."
-    code, out, err = _run(["arm-none-eabi-size", elf])
-    if code != 0:
-        return f"ERROR: arm-none-eabi-size failed: {err.strip()}"
-    return f"ELF: {os.path.basename(elf)}\n{out.strip()}"
+    elfs = _find_elfs(project_path)
+    if not elfs:
+        return f"No .elf file found under {project_path}. Run build_firmware first."
+    lines = []
+    for elf in sorted(elfs):
+        code, out, err = _run(["arm-none-eabi-size", elf])
+        if code == 0:
+            lines.append(f"{os.path.basename(elf)}:\n{out.strip()}")
+    return "\n\n".join(lines) if lines else "arm-none-eabi-size failed on all ELFs."
 
 
 @mcp.tool()
@@ -123,10 +157,10 @@ def flash_firmware(
                         (e.g. /usr/share/openocd/scripts/target/stm32wlx.cfg).
         build_dir: Build directory name. Default: "build".
     """
-    build_path = os.path.join(project_path, build_dir)
-    elf = _find_elf(build_path)
-    if not elf:
-        return f"No .elf file found in {build_path}. Run build_firmware first."
+    elfs = _find_elfs(project_path)
+    if not elfs:
+        return f"No .elf file found under {project_path}. Run build_firmware first."
+    elf = sorted(elfs)[0]
 
     code, out, err = _run([
         "openocd",
