@@ -197,20 +197,19 @@ Goal: Claude Code reads serial log and flashes firmware
 
 | # | Task | Testable | Acceptance Criteria |
 |---|------|----------|---------------------|
-| 1.1 | Create project, install FastMCP | ✅ | `fastmcp dev` launches empty server |
-| 1.2 | Serial MCP Server + anomaly detection | ✅ | **Done** — Claude Code calls `read_serial_log()` |
-| 1.4 | Build & Flash MCP — build side | ✅ | Claude Code calls `build_firmware()`, returns errors |
-| 1.4 | Build & Flash MCP — flash side | ⚠️ Board | `flash_firmware()` flashes connected target |
+| 1.1 | Create project, install FastMCP | ✅ | **Done** |
+| 1.2 | Serial MCP Server + anomaly detection | ✅ | **Done** |
+| 1.4 | Build & Flash MCP — build + flash | ✅ | **Done** — tested on STM32WL55 dual-core |
 | 1.5 | Write initial `CLAUDE.md` | ✅ | **Done** |
-| 1.6 | E2E verification | ⚠️ Board | edit → Build → Flash → read Serial Log |
+| 1.6 | E2E verification | ✅ | **Done** — edit → Build → Flash via MCP |
 
 ### Phase 2 — Perception Expansion (Weeks 3–5)
 Goal: AI "sees" hardware faults via JTAG + Power + Vision
 
 | # | Task | Testable | Acceptance Criteria |
 |---|------|----------|---------------------|
-| 2.1 | JTAG/SWD MCP Server (pyocd) | ❌ ST-Link + board | `read_call_stack()` returns HardFault stack trace |
-| 2.2 | HardFault semantic parser | ❌ ST-Link + board | CFSR/HFSR auto-translated to human-readable cause |
+| 2.1 | JTAG/SWD MCP Server (pyocd) | ✅ ST-Link V3 connected | **In progress** |
+| 2.2 | HardFault semantic parser | ✅ ST-Link V3 connected | **In progress** |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
@@ -268,7 +267,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 
 | Date | Milestone |
 |------|-----------|
-| [2026-03-19](doc/2026-03-19.md) | Repo initialized, Serial MCP server, Claude Code integration |
+| [2026-03-19](doc/2026-03-19.md) | Phase 1 complete — Serial MCP, Build & Flash MCP, hardware-tested on STM32WL55 |
 
 ---
 
