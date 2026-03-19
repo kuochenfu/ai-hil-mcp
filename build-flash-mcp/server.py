@@ -144,38 +144,41 @@ def get_build_size(project_path: str, build_dir: str = "build") -> str:
 @mcp.tool()
 def flash_firmware(
     project_path: str,
-    openocd_config: str,
-    build_dir: str = "build",
+    openocd_config: str = "/opt/homebrew/Cellar/open-ocd/0.12.0_1/share/openocd/scripts/target/stm32wlx.cfg",
 ) -> str:
     """
-    Flash the built ELF to the target board via OpenOCD and ST-Link.
-    NOTE: Requires a connected ST-Link V3 and target board.
+    Flash all built ELFs to the target board via OpenOCD and ST-Link V3.
+    Supports dual-core projects — programs all ELFs in a single OpenOCD session.
+    Requires a connected ST-Link V3 and powered target board.
 
     Args:
         project_path: Absolute path to the CMake project root.
-        openocd_config: Absolute path to the OpenOCD target config file
-                        (e.g. /usr/share/openocd/scripts/target/stm32wlx.cfg).
-        build_dir: Build directory name. Default: "build".
+        openocd_config: Path to the OpenOCD target config file.
+                        Defaults to stm32wlx.cfg for STM32WL55.
     """
-    elfs = _find_elfs(project_path)
+    elfs = sorted(_find_elfs(project_path))
     if not elfs:
         return f"No .elf file found under {project_path}. Run build_firmware first."
-    elf = sorted(elfs)[0]
 
-    code, out, err = _run([
+    # Build a single OpenOCD session: program each ELF, reset once at the end
+    program_cmds = " ".join(f"program {{{elf}}} verify;" for elf in elfs)
+    cmd = [
         "openocd",
         "-f", "interface/stlink.cfg",
         "-f", openocd_config,
-        "-c", f"program {{{elf}}} verify reset exit",
-    ], timeout=60)
+        "-c", f"{program_cmds} reset halt; resume; exit",
+    ]
 
+    code, out, err = _run(cmd, timeout=60)
     combined = (out + err).strip()
+
     if code != 0:
         errors = _extract_errors(combined, "error") or combined.splitlines()[-5:]
         return "Flash FAILED:\n" + "\n".join(errors[:10])
 
+    flashed = [os.path.basename(e) for e in elfs]
     if "verified" in combined.lower():
-        return f"Flash SUCCESS. Firmware verified and device reset.\nELF: {os.path.basename(elf)}"
+        return f"Flash SUCCESS. Verified and reset.\nFlashed: {', '.join(flashed)}"
     return f"Flash completed (verify status unclear).\nOutput:\n{combined[-300:]}"
 
 
