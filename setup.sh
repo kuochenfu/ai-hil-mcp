@@ -21,8 +21,11 @@ echo "==> Registering MCP servers in your current project..."
 claude mcp add serial-mcp -s project -- \
   "$REPO_DIR/.venv/bin/python" "$REPO_DIR/serial-mcp/server.py"
 
+claude mcp add build-flash-mcp -s project -- \
+  "$REPO_DIR/.venv/bin/python" "$REPO_DIR/build-flash-mcp/server.py"
+
 echo ""
 echo "Done! MCP servers registered:"
-claude mcp list | grep -E "serial-mcp"
+claude mcp list | grep -E "serial-mcp|build-flash-mcp"
 echo ""
 echo "To verify, run: claude mcp list"
