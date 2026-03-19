@@ -15,6 +15,14 @@
         "/Users/chenfu/Labs/ai-hil-mcp/build-flash-mcp/server.py"
       ],
       "env": {}
+    },
+    "jtag-mcp": {
+      "type": "stdio",
+      "command": "/Users/chenfu/Labs/ai-hil-mcp/.venv/bin/python",
+      "args": [
+        "/Users/chenfu/Labs/ai-hil-mcp/jtag-mcp/server.py"
+      ],
+      "env": {}
     }
   }
 }
