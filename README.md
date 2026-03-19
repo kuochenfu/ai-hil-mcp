@@ -201,7 +201,7 @@ Goal: Claude Code reads serial log and flashes firmware
 | 1.2 | Serial MCP Server + anomaly detection | ✅ | **Done** |
 | 1.4 | Build & Flash MCP — build + flash | ✅ | **Done** — tested on STM32WL55 dual-core |
 | 1.5 | Write initial `CLAUDE.md` | ✅ | **Done** |
-| 1.6 | E2E verification | ✅ | **Done** — edit → Build → Flash via MCP |
+| 1.6 | E2E verification | ✅ | **Done** — Build → Flash → Serial log captured (boot banner + radio events) |
 
 ### Phase 2 — Perception Expansion (Weeks 3–5)
 Goal: AI "sees" hardware faults via JTAG + Power + Vision
