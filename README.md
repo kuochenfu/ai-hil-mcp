@@ -208,8 +208,8 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 
 | # | Task | Testable | Acceptance Criteria |
 |---|------|----------|---------------------|
-| 2.1 | JTAG/SWD MCP Server (pyocd) | ✅ ST-Link V3 connected | **In progress** |
-| 2.2 | HardFault semantic parser | ✅ ST-Link V3 connected | **In progress** |
+| 2.1 | JTAG/SWD MCP Server (pyocd) | ✅ | **Done** — registers, memory, call stack |
+| 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
