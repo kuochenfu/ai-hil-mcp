@@ -94,18 +94,34 @@ Verification ── PASS ──► Record bug in CLAUDE.md ──► next Triage
 
 ## Quick Start
 
+**1. Clone this repo once** (anywhere on your machine):
+
 ```bash
-# Install FastMCP and Phase 1 dependencies
-pip install fastmcp pyserial pyocd opencv-python ppk2-api
-
-# Launch a server in dev mode (hot-reload)
-fastmcp dev serial-mcp/server.py
-
-# Run standalone
-python serial-mcp/server.py
+git clone https://github.com/kuochenfu/ai-hil-mcp.git ~/ai-hil-mcp
 ```
 
-Configure Claude Code to connect to the servers by adding MCP entries pointing to `localhost:8001`–`:8006`.
+**2. In each new firmware project**, run setup to register the MCP servers:
+
+```bash
+cd ~/my-firmware-project
+bash ~/ai-hil-mcp/setup.sh
+```
+
+This creates a `.mcp.json` in your project — Claude Code will auto-connect to the MCP servers when you open that project.
+
+**3. Verify:**
+
+```bash
+claude mcp list
+# serial-mcp: ... ✓ Connected
+```
+
+### Dev mode (hot-reload for server development)
+
+```bash
+cd ~/ai-hil-mcp
+.venv/bin/fastmcp dev serial-mcp/server.py
+```
 
 ---
 
@@ -241,6 +257,16 @@ Goal: Expand sensing + integrate into continuous integration
 | STM32WL55JC | Sub-GHz spectrum validation, ultra-low-power verification |
 | RPi CM4 | Edge gateway, dual-mode reception validation, Rule Engine testing |
 | Zenoh gateway | Router stress testing, offline autonomy validation |
+
+---
+
+## Dev Logs
+
+Progress is tracked in [`doc/`](doc/) with daily logs.
+
+| Date | Milestone |
+|------|-----------|
+| [2026-03-19](doc/2026-03-19.md) | Repo initialized, Serial MCP server, Claude Code integration |
 
 ---
 
