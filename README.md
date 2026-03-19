@@ -190,49 +190,51 @@ When Claude Code encounters a hardware issue:
 
 ## Implementation Roadmap
 
+> **Testing policy:** Tasks marked ❌ require physical hardware and are deferred until the equipment is available. Tasks marked ✅ or ⚠️ are implemented first.
+
 ### Phase 1 — Foundation (Weeks 1–2)
 Goal: Claude Code reads serial log and flashes firmware
 
-| # | Task | Acceptance Criteria |
-|---|------|---------------------|
-| 1.1 | Create `ai-hil-mcp/` project, install FastMCP | `fastmcp dev` launches empty server |
-| 1.2 | Serial MCP Server | Claude Code calls `read_serial_log()` and sees MCU output |
-| 1.3 | Semantic distillation | `HardFault` in log returns structured summary |
-| 1.4 | Build & Flash MCP | Claude Code calls `build_firmware()` then `flash_firmware()` |
-| 1.5 | Write initial `CLAUDE.md` | Claude Code auto-loads hardware constraints on startup |
-| 1.6 | E2E verification | edit → Build → Flash → read Serial Log |
+| # | Task | Testable | Acceptance Criteria |
+|---|------|----------|---------------------|
+| 1.1 | Create project, install FastMCP | ✅ | `fastmcp dev` launches empty server |
+| 1.2 | Serial MCP Server + anomaly detection | ✅ | **Done** — Claude Code calls `read_serial_log()` |
+| 1.4 | Build & Flash MCP — build side | ✅ | Claude Code calls `build_firmware()`, returns errors |
+| 1.4 | Build & Flash MCP — flash side | ⚠️ Board | `flash_firmware()` flashes connected target |
+| 1.5 | Write initial `CLAUDE.md` | ✅ | **Done** |
+| 1.6 | E2E verification | ⚠️ Board | edit → Build → Flash → read Serial Log |
 
 ### Phase 2 — Perception Expansion (Weeks 3–5)
 Goal: AI "sees" hardware faults via JTAG + Power + Vision
 
-| # | Task | Acceptance Criteria |
-|---|------|---------------------|
-| 2.1 | JTAG/SWD MCP Server (pyocd) | `read_call_stack()` returns HardFault stack trace |
-| 2.2 | HardFault semantic parser | CFSR/HFSR auto-translated to human-readable cause |
-| 2.3 | PPK2 MCP Server | `measure_current()` validates Deep Sleep current |
-| 2.4 | Vision MCP Server | `detect_led_state()` confirms LED state |
-| 2.5 | Multi-sense diagnosis test | Inject memory overflow bug, AI locates root cause |
+| # | Task | Testable | Acceptance Criteria |
+|---|------|----------|---------------------|
+| 2.1 | JTAG/SWD MCP Server (pyocd) | ❌ ST-Link + board | `read_call_stack()` returns HardFault stack trace |
+| 2.2 | HardFault semantic parser | ❌ ST-Link + board | CFSR/HFSR auto-translated to human-readable cause |
+| 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
+| 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
+| 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
 
 ### Phase 3 — Closed-Loop Automation (Weeks 6–8)
 Goal: AI autonomously completes Triage → Diagnosis → Remediation → Verification
 
-| # | Task | Acceptance Criteria |
-|---|------|---------------------|
-| 3.1 | AI-HIL Orchestrator script | Auto-triggers full diagnosis cycle |
-| 3.2 | Power Control MCP Server | `hard_reset()` reboots target board |
-| 3.3 | Automated closed-loop verification | edit → Build → Flash → Reset → check → PASS/FAIL |
-| 3.4 | CLAUDE.md auto-update | Bug pattern appended to Known Bug Record after each fix |
-| 3.5 | Regression test suite | Known bug → reproduce → auto-fix → verify PASS |
+| # | Task | Testable | Acceptance Criteria |
+|---|------|----------|---------------------|
+| 3.1 | AI-HIL Orchestrator script | ⚠️ Partial | Auto-triggers full diagnosis cycle |
+| 3.2 | Power Control MCP Server | ❌ USB Relay | `hard_reset()` reboots target board |
+| 3.3 | Automated closed-loop verification | ❌ Full hardware | edit → Build → Flash → Reset → check → PASS/FAIL |
+| 3.4 | CLAUDE.md auto-update | ✅ | Bug pattern appended to Known Bug Record after each fix |
+| 3.5 | Regression test suite | ❌ Full hardware | Known bug → reproduce → auto-fix → verify PASS |
 
 ### Phase 4 — Advanced Perception + CI/CD (Weeks 9–12)
 Goal: Expand sensing + integrate into continuous integration
 
-| # | Task | Acceptance Criteria |
-|---|------|---------------------|
-| 4.1 | SDR MCP Server | Detect LoRa/Sub-GHz emission, return spectrum summary |
-| 4.2 | Thermal/Mic MCP Server | Detect overheating and coil whine |
-| 4.3 | CI/CD pipeline | GitHub Actions → SSH to HIL workstation → auto Build/Flash/Test |
-| 4.4 | Multi-board support | Same MCP works with STM32WL + ESP32-S3 |
+| # | Task | Testable | Acceptance Criteria |
+|---|------|----------|---------------------|
+| 4.1 | SDR MCP Server | ❌ RTL-SDR V4 | Detect LoRa/Sub-GHz emission, return spectrum summary |
+| 4.2 | Thermal/Mic MCP Server | ❌ FLIR + mic | Detect overheating and coil whine |
+| 4.3 | CI/CD pipeline | ⚠️ Partial | GitHub Actions → SSH to HIL workstation → auto Build/Flash/Test |
+| 4.4 | Multi-board support | ❌ Both boards | Same MCP works with STM32WL + ESP32-S3 |
 
 ---
 
