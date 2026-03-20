@@ -37,8 +37,21 @@ else
   fi
 fi
 
-claude mcp add build-flash-mcp -s project -- \
-  "$REPO_DIR/.venv/bin/python" "$REPO_DIR/build-flash-mcp/server.py"
+BUILD_RS="$REPO_DIR/build-flash-mcp-rs/target/release/build-flash-mcp-rs"
+if [ -f "$BUILD_RS" ]; then
+  echo "==> Using Rust build-flash-mcp-rs binary..."
+  claude mcp add build-flash-mcp -s project -- "$BUILD_RS"
+else
+  echo "==> Rust binary not found, building build-flash-mcp-rs..."
+  if command -v cargo &>/dev/null; then
+    cargo build --release --manifest-path "$REPO_DIR/build-flash-mcp-rs/Cargo.toml"
+    claude mcp add build-flash-mcp -s project -- "$BUILD_RS"
+  else
+    echo "==> cargo not found, falling back to Python build-flash-mcp..."
+    claude mcp add build-flash-mcp -s project -- \
+      "$REPO_DIR/.venv/bin/python" "$REPO_DIR/build-flash-mcp/server.py"
+  fi
+fi
 
 JTAG_RS="$REPO_DIR/jtag-mcp-rs/target/release/jtag-mcp-rs"
 if [ -f "$JTAG_RS" ]; then

@@ -1,6 +1,6 @@
 # AI-HIL Embedded Dev Automation
 
-**Version:** v1.3 · 2026-03-21
+**Version:** v1.4 · 2026-03-21
 
 > Give a single engineer the development, debugging, and verification capacity of a 3–5 person hardware team — through AI-assisted closed-loop automation.
 
@@ -54,7 +54,7 @@ Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). E
 | `jtag-mcp` | :8002 | `pyocd` (Python) · `probe-rs` (Rust) | Call stack, register/memory read, HardFault semantic diagnosis |
 | `vision-mcp` | :8003 | `opencv-python` | LED state detection, LCD OCR, frame capture |
 | `ppk2-mcp` | :8004 | `ppk2-api` | Current measurement, Deep Sleep verification, RF burst detection |
-| `build-flash-mcp` | :8005 | `subprocess` | Firmware build/flash/erase via PlatformIO / west / cargo |
+| `build-flash-mcp` | :8005 | `subprocess` (Python) · `std::process::Command` (Rust) | Firmware build/flash/erase via CMake + OpenOCD |
 | `power-control-mcp` | :8006 | `pyusb` / `gpiozero` | Hard reset, power cycle via USB relay |
 | `sdr-mcp` *(Phase 4)* | :8007 | `pyrtlsdr` | RF spectrum scan, noise floor, emission detection |
 | `thermal-mic-mcp` *(Phase 4)* | :8008 | `pyaudio` + FLIR SDK | Thermal imaging, coil whine detection |
@@ -213,6 +213,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 | 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
 | 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — single binary, hardware-verified on STM32WL55 |
 | 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured) |
+| 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — all 4 tools verified (MCP protocol + schema) |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
@@ -271,7 +272,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | Date | Milestone |
 |------|-----------|
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
-| 2026-03-21 | Phase 2.2b/c — Rust `jtag-mcp-rs` + `serial-mcp-rs` added; both hardware-verified on STM32WL55 |
+| 2026-03-21 | Phase 2.2b/c/d — All 3 MCP servers ported to Rust (`jtag-mcp-rs`, `serial-mcp-rs`, `build-flash-mcp-rs`); Python kept as fallback |
 
 ---
 

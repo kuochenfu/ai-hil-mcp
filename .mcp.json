@@ -16,6 +16,12 @@
     },
     "build-flash-mcp": {
       "type": "stdio",
+      "command": "/Users/chenfu/Labs/ai-hil-mcp/build-flash-mcp-rs/target/release/build-flash-mcp-rs",
+      "args": [],
+      "env": {}
+    },
+    "build-flash-mcp-py": {
+      "type": "stdio",
       "command": "/Users/chenfu/Labs/ai-hil-mcp/.venv/bin/python",
       "args": [
         "/Users/chenfu/Labs/ai-hil-mcp/build-flash-mcp/server.py"
