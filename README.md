@@ -272,7 +272,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | Date | Milestone |
 |------|-----------|
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
-| 2026-03-21 | Phase 2.2b/c/d — All 3 MCP servers ported to Rust (`jtag-mcp-rs`, `serial-mcp-rs`, `build-flash-mcp-rs`); Python kept as fallback |
+| [2026-03-21](doc/2026-03-21.md) | Phase 2.2b/c/d — All 3 MCP servers ported to Rust and hardware-verified on STM32WL55 |
 
 ---
 
