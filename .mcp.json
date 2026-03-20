@@ -18,6 +18,12 @@
     },
     "jtag-mcp": {
       "type": "stdio",
+      "command": "/Users/chenfu/Labs/ai-hil-mcp/jtag-mcp-rs/target/release/jtag-mcp-rs",
+      "args": [],
+      "env": {}
+    },
+    "jtag-mcp-py": {
+      "type": "stdio",
       "command": "/Users/chenfu/Labs/ai-hil-mcp/.venv/bin/python",
       "args": [
         "/Users/chenfu/Labs/ai-hil-mcp/jtag-mcp/server.py"

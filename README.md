@@ -1,6 +1,6 @@
 # AI-HIL Embedded Dev Automation
 
-**Version:** v1.1 · 2026-03-19
+**Version:** v1.2 · 2026-03-21
 
 > Give a single engineer the development, debugging, and verification capacity of a 3–5 person hardware team — through AI-assisted closed-loop automation.
 
@@ -46,12 +46,12 @@
 
 ## MCP Servers
 
-All servers are built with **FastMCP (Python)**. Each server encapsulates one hardware dimension and returns **semantic text** (diagnostic conclusions, not raw binary data).
+Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). Each server encapsulates one hardware dimension and returns **semantic text** (diagnostic conclusions, not raw binary data).
 
 | Server | Port | Library | Purpose |
 |--------|------|---------|---------|
 | `serial-mcp` | :8001 | `pyserial` | Read UART logs, detect anomalies (`HardFault`, `Panic`, `Watchdog`) |
-| `jtag-mcp` | :8002 | `pyocd` | Call stack, register/memory read, HardFault semantic diagnosis |
+| `jtag-mcp` | :8002 | `pyocd` (Python) · `probe-rs` (Rust) | Call stack, register/memory read, HardFault semantic diagnosis |
 | `vision-mcp` | :8003 | `opencv-python` | LED state detection, LCD OCR, frame capture |
 | `ppk2-mcp` | :8004 | `ppk2-api` | Current measurement, Deep Sleep verification, RF burst detection |
 | `build-flash-mcp` | :8005 | `subprocess` | Firmware build/flash/erase via PlatformIO / west / cargo |
@@ -65,6 +65,7 @@ All servers are built with **FastMCP (Python)**. Each server encapsulates one ha
 - **Tools return semantic text** — e.g., `"Stack overflow in task foo"`, not `0xE000ED28 = 0x0400`
 - **Resources** expose real-time state; **Tools** execute active operations
 - **Errors return clear messages**, not Python tracebacks
+- **Python and Rust implementations are interchangeable** — same tool names and return format; swap by editing `.mcp.json`
 
 ---
 
@@ -210,6 +211,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 |---|------|----------|---------------------|
 | 2.1 | JTAG/SWD MCP Server (pyocd) | ✅ | **Done** — registers, memory, call stack |
 | 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
+| 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — single binary, hardware-verified on STM32WL55 |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
@@ -268,6 +270,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | Date | Milestone |
 |------|-----------|
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
+| 2026-03-21 | Phase 2.2b — Rust `jtag-mcp-rs` added (`probe-rs` + `rmcp`); hardware-verified on STM32WL55 |
 
 ---
 
