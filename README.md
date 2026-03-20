@@ -213,7 +213,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 | 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
 | 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — single binary, hardware-verified on STM32WL55 |
 | 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured) |
-| 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — all 4 tools verified (MCP protocol + schema) |
+| 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — hardware-verified: build → flash → serial confirmed on STM32WL55 |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
