@@ -1,91 +1,192 @@
-# CLAUDE.md
+# CLAUDE.md — AI-HIL Embedded Dev Automation
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file is the operating brain for Claude Code on this repository.
+Follow the SOPs below exactly when working with physical hardware.
+
+---
 
 ## Project Overview
 
-**AI-HIL (AI-Hardware-in-the-Loop) Embedded Dev Automation**.
+**AI-HIL (AI-Hardware-in-the-Loop)** gives Claude Code the ability to perceive, act on,
+and validate physical embedded hardware via MCP servers.
 
-This repository is transitioning from architectural specification to implementation. The spec lives in `doc/AIHIL_embedded_dev_automation.md`. The goal is to give Claude Code the ability to **perceive, act on, and validate** physical embedded hardware via MCP servers.
+## Active MCP Servers
 
-## Architecture
-
-The system has 5 planes connected through FastMCP:
-
-- **Brain:** Claude Code CLI + CLAUDE.md hardware constraints
-- **Nervous System:** FastMCP (Python) — the MCP layer bridging AI to hardware
-- **Perception Plane:** Serial/SSH, JTAG/SWD, Webcam/OpenCV, PPK2 power profiler, SDR, Thermal/Mic
-- **Action Plane:** Build/Flash/Erase firmware, hard reset/power cycle, GPIO/virtual sensor simulation
-- **Context Plane:** Datasheets, schematics, golden sample measurements
-
-### MCP Server Layout (to be implemented)
-
-Each server encapsulates one hardware dimension, runs independently, and returns **semantic text** (not raw binary):
-
-| Server | Port | Library | Purpose |
-|--------|------|---------|---------|
-| `serial-mcp` | :8001 | `pyserial` | UART log reading, anomaly detection |
-| `jtag-mcp` | :8002 | `pyocd` | Call stack, register/memory read, HardFault diagnosis |
-| `vision-mcp` | :8003 | `opencv-python` | LED state, LCD OCR, frame capture |
-| `ppk2-mcp` | :8004 | `ppk2-api` | Current measurement, deep sleep verification |
-| `build-flash-mcp` | :8005 | `subprocess` → `pio`/`west`/`cargo` | Firmware build, flash, erase |
-| `power-control-mcp` | :8006 | `pyusb`/`gpiozero` | Hard reset, power cycle via USB relay |
-
-SDR (`:8007`, `pyrtlsdr`) and Thermal/Mic (`:8008`, `pyaudio`+FLIR) are Phase 4.
-
-## Development Commands
-
-*To be filled in as implementation progresses (Phase 1 starts 2026-03-24).*
-
-For each MCP server, the expected workflow will be:
-
-```bash
-# Install FastMCP and server dependencies
-pip install fastmcp pyserial pyocd opencv-python ppk2-api
-
-# Launch a server in dev mode (auto-reload)
-fastmcp dev serial-mcp/server.py
-
-# Run server standalone
-python serial-mcp/server.py
-```
-
-## MCP Design Principles
-
-1. **One server = one hardware dimension** — independent start/stop
-2. **Tools return semantic text** — e.g., `"WARNING: HardFault detected: Stack overflow in task foo"`, not raw register hex
-3. **Resources expose real-time state**; Tools execute active operations
-4. **Error handling returns clear messages**, not Python tracebacks — the AI needs to understand the error
-
-## Standard Diagnostic SOP (for embedded CLAUDE.md templates)
-
-```
-1. read_serial_log()          -- check for obvious errors first
-2. read_call_stack()          -- if HardFault or hang suspected
-3. measure_current(5000)      -- if power anomaly suspected
-4. capture_frame()            -- if physical state unclear
-5. build_firmware() -> flash_firmware() -> repeat step 1
-```
-
-## Closed-Loop Automation Flow
-
-```
-Triage (detect anomaly) → Diagnosis (JTAG + PPK2 + Vision in parallel)
-→ Remediation (Claude fixes code) → Build & Flash → Verification
-→ Record bug pattern in Known Bug Record → next Triage
-```
+| Server | Tools | Binary |
+|--------|-------|--------|
+| `serial-mcp` | `list_serial_ports`, `read_serial_log`, `send_serial_command` | `serial-mcp-rs` |
+| `jtag-mcp` | `halt_cpu`, `resume_cpu`, `read_registers`, `read_memory`, `read_call_stack`, `diagnose_hardfault` | `jtag-mcp-rs` |
+| `build-flash-mcp` | `build_firmware`, `clean_build`, `get_build_size`, `flash_firmware` | `build-flash-mcp-rs` |
 
 ## Target Hardware
 
-- **ESP32-S3**: LoRa mote, Deep Sleep validation, RF verification, WiFi/BLE sensor nodes
-- **STM32WL55JC**: Sub-GHz, ultra-low-power embedded targets
-- **RPi CM4**: Edge gateway, dual-mode receiver
-- **Zenoh-based mesh network gateway**
+- **STM32WL55JC** (NUCLEO-WL55JC1) — Sub-GHz LoRa, ultra-low-power
+- Serial port: `/dev/cu.usbmodem1303` @ 115200 baud
+- Firmware project: `/Users/chenfu/Labs/stm_projects/synapse-lora/CM4`, preset `Debug`
+- Debugger: ST-Link V3 via `jtag-mcp`
 
-## Safety Constraints
+---
 
-- Never modify ISR handlers without reading call stack first
-- Always `halt_cpu()` before flash operations
-- Wait 2s after `power_cycle()` before serial reads
-- Confirm PPK2 measurement range (uA vs mA mode) before measuring
-- Watchdog timeout is typically 2s — feed periodically during long operations
+## Safety Constraints — ALWAYS ENFORCE
+
+- **Never** modify ISR handlers without reading call stack first (`read_call_stack`)
+- **Always** call `halt_cpu()` before any flash operation
+- **Never** flash if build returned errors
+- **Wait 3s** after flash before reading serial (board needs time to boot)
+- Watchdog timeout is 2s — do not halt CPU for more than 1.5s during live diagnosis
+- If `diagnose_hardfault` shows `FORCED` in HFSR, always check CFSR for root cause before touching code
+
+---
+
+## Orchestrator SOP
+
+When triggered (manually or by watcher), execute this loop in order.
+Do not skip steps. Do not ask for confirmation between steps unless blocked.
+
+### Step 1 — Triage
+
+```
+read_serial_log(port="/dev/cu.usbmodem1303", baud=115200, lines=50, timeout_s=8)
+```
+
+Classify the result:
+
+| Pattern in log | Classification | Go to |
+|---------------|---------------|-------|
+| `HardFault`, `hard fault` | HardFault | Step 2A |
+| `panic`, `assert` | Panic / Assert | Step 2B |
+| `watchdog`, `IWDG` | Watchdog Reset | Step 2C |
+| `stack overflow` | Stack Overflow | Step 2A |
+| No output / timeout | Board hang or dead | Step 2D |
+| Clean output, no anomaly | Healthy | Stop — log "No anomaly detected" |
+
+### Step 2A — HardFault / Stack Overflow Diagnosis
+
+Run these in parallel:
+
+```
+diagnose_hardfault()          ← decode HFSR + CFSR + fault address
+read_call_stack()             ← exception frame at SP
+read_registers()              ← full register snapshot
+```
+
+Interpret:
+- `PRECISERR + BFARVALID` → precise bus fault, check BFAR address
+- `IACCVIOL` → jumped to invalid address, check PC and LR
+- `DIVBYZERO` → integer divide by zero, check PC for offending function
+- `STKERR` → stack overflow confirmed, check SP vs stack bottom
+- `FORCED` in HFSR → escalated fault, CFSR holds real cause
+
+Locate the faulting function: PC from exception frame (SP+0x18) → cross-reference with map file or ELF symbols.
+
+### Step 2B — Panic / Assert Diagnosis
+
+```
+read_serial_log(lines=100)    ← capture full panic output
+read_registers()              ← confirm CPU state
+```
+
+Extract file, line number, and condition from the panic message.
+
+### Step 2C — Watchdog Reset Diagnosis
+
+```
+read_serial_log(lines=100)    ← look for last activity before reset
+read_registers()              ← check if CPU is in unexpected state
+```
+
+Look for long-running loops, blocking waits, or missing `HAL_IWDG_Refresh()` calls.
+
+### Step 2D — Board Hang (No Output)
+
+```
+halt_cpu()
+read_registers()              ← where is PC stuck?
+read_call_stack()
+```
+
+Check if CPU is spinning in a tight loop, blocked on semaphore, or in infinite fault loop.
+
+### Step 3 — Remediation
+
+Based on diagnosis:
+1. Identify the source file and function at fault
+2. Read the relevant source file(s) before making any changes
+3. Apply the minimal fix — do not refactor unrelated code
+4. If touching an ISR: re-read call stack first, ensure fix does not affect interrupt timing
+
+### Step 4 — Build & Flash
+
+```
+build_firmware(
+  project_path="/Users/chenfu/Labs/stm_projects/synapse-lora/CM4",
+  preset="Debug"
+)
+```
+
+If build fails: fix compile errors, do not flash. Go back to Step 3.
+
+```
+flash_firmware(
+  project_path="/Users/chenfu/Labs/stm_projects/synapse-lora/CM4"
+)
+```
+
+Wait 3 seconds after flash completes.
+
+### Step 5 — Verification
+
+```
+read_serial_log(port="/dev/cu.usbmodem1303", lines=30, timeout_s=10)
+```
+
+Pass criteria:
+- No anomaly keywords in output
+- Expected boot banner present (e.g. `System Initialization`, `Tx PING`)
+- Board producing output (not silent)
+
+If FAIL: go back to Step 2 with the new serial output as context.
+If PASS: go to Step 6.
+
+### Step 6 — Record to Known Bug Record
+
+Append to the Known Bug Record section below:
+
+```
+### [YYYY-MM-DD] <short title>
+- **Symptom:** <what the serial log / watchdog showed>
+- **Root cause:** <CFSR flags, function name, line>
+- **Fix:** <what was changed and why>
+- **Verified:** clean boot confirmed
+```
+
+---
+
+## Known Bug Record
+
+<!-- Orchestrator appends entries here after each verified fix -->
+
+### [2026-03-19] HardFault — PRECISERR on invalid memory read
+- **Symptom:** HardFault detected in serial log during LoRa RX callback
+- **Root cause:** CFSR=PRECISERR+BFARVALID, BFAR=0x60000000 — deliberate fault injection test
+- **Fix:** Test only — reflashed clean firmware, all fault bits cleared
+- **Verified:** clean boot confirmed, LoRa PING/PONG traffic resumed
+
+---
+
+## Architecture Reference
+
+```
+Brain:           Claude Code CLI + this CLAUDE.md
+Nervous System:  MCP servers (Rust binaries)
+Perception:      serial-mcp (UART logs) · jtag-mcp (registers, memory, faults)
+Action:          build-flash-mcp (CMake + OpenOCD)
+```
+
+### Closed-Loop Flow
+
+```
+Triage → Diagnosis → Remediation → Build & Flash → Verification → Known Bug Record
+  ▲                                                      │
+  └──────────────────── FAIL ────────────────────────────┘
+```
