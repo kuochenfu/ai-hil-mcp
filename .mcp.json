@@ -2,6 +2,12 @@
   "mcpServers": {
     "serial-mcp": {
       "type": "stdio",
+      "command": "/Users/chenfu/Labs/ai-hil-mcp/serial-mcp-rs/target/release/serial-mcp-rs",
+      "args": [],
+      "env": {}
+    },
+    "serial-mcp-py": {
+      "type": "stdio",
       "command": "/Users/chenfu/Labs/ai-hil-mcp/.venv/bin/python",
       "args": [
         "/Users/chenfu/Labs/ai-hil-mcp/serial-mcp/server.py"

@@ -1,6 +1,6 @@
 # AI-HIL Embedded Dev Automation
 
-**Version:** v1.2 · 2026-03-21
+**Version:** v1.3 · 2026-03-21
 
 > Give a single engineer the development, debugging, and verification capacity of a 3–5 person hardware team — through AI-assisted closed-loop automation.
 
@@ -50,7 +50,7 @@ Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). E
 
 | Server | Port | Library | Purpose |
 |--------|------|---------|---------|
-| `serial-mcp` | :8001 | `pyserial` | Read UART logs, detect anomalies (`HardFault`, `Panic`, `Watchdog`) |
+| `serial-mcp` | :8001 | `pyserial` (Python) · `serialport` (Rust) | Read UART logs, detect anomalies (`HardFault`, `Panic`, `Watchdog`) |
 | `jtag-mcp` | :8002 | `pyocd` (Python) · `probe-rs` (Rust) | Call stack, register/memory read, HardFault semantic diagnosis |
 | `vision-mcp` | :8003 | `opencv-python` | LED state detection, LCD OCR, frame capture |
 | `ppk2-mcp` | :8004 | `ppk2-api` | Current measurement, Deep Sleep verification, RF burst detection |
@@ -212,6 +212,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 | 2.1 | JTAG/SWD MCP Server (pyocd) | ✅ | **Done** — registers, memory, call stack |
 | 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
 | 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — single binary, hardware-verified on STM32WL55 |
+| 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured) |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
@@ -270,7 +271,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | Date | Milestone |
 |------|-----------|
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
-| 2026-03-21 | Phase 2.2b — Rust `jtag-mcp-rs` added (`probe-rs` + `rmcp`); hardware-verified on STM32WL55 |
+| 2026-03-21 | Phase 2.2b/c — Rust `jtag-mcp-rs` + `serial-mcp-rs` added; both hardware-verified on STM32WL55 |
 
 ---
 

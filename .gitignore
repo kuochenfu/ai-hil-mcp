@@ -9,3 +9,4 @@ __pycache__/
 
 # Rust
 jtag-mcp-rs/target/
+serial-mcp-rs/target/

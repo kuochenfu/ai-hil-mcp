@@ -21,8 +21,21 @@ echo "==> Installing pyocd device pack for STM32WL55..."
 
 echo "==> Registering MCP servers in your current project..."
 
-claude mcp add serial-mcp -s project -- \
-  "$REPO_DIR/.venv/bin/python" "$REPO_DIR/serial-mcp/server.py"
+SERIAL_RS="$REPO_DIR/serial-mcp-rs/target/release/serial-mcp-rs"
+if [ -f "$SERIAL_RS" ]; then
+  echo "==> Using Rust serial-mcp-rs binary..."
+  claude mcp add serial-mcp -s project -- "$SERIAL_RS"
+else
+  echo "==> Rust binary not found, building serial-mcp-rs..."
+  if command -v cargo &>/dev/null; then
+    cargo build --release --manifest-path "$REPO_DIR/serial-mcp-rs/Cargo.toml"
+    claude mcp add serial-mcp -s project -- "$SERIAL_RS"
+  else
+    echo "==> cargo not found, falling back to Python serial-mcp..."
+    claude mcp add serial-mcp -s project -- \
+      "$REPO_DIR/.venv/bin/python" "$REPO_DIR/serial-mcp/server.py"
+  fi
+fi
 
 claude mcp add build-flash-mcp -s project -- \
   "$REPO_DIR/.venv/bin/python" "$REPO_DIR/build-flash-mcp/server.py"
