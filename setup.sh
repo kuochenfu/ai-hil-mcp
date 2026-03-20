@@ -27,8 +27,21 @@ claude mcp add serial-mcp -s project -- \
 claude mcp add build-flash-mcp -s project -- \
   "$REPO_DIR/.venv/bin/python" "$REPO_DIR/build-flash-mcp/server.py"
 
-claude mcp add jtag-mcp -s project -- \
-  "$REPO_DIR/.venv/bin/python" "$REPO_DIR/jtag-mcp/server.py"
+JTAG_RS="$REPO_DIR/jtag-mcp-rs/target/release/jtag-mcp-rs"
+if [ -f "$JTAG_RS" ]; then
+  echo "==> Using Rust jtag-mcp-rs binary..."
+  claude mcp add jtag-mcp -s project -- "$JTAG_RS"
+else
+  echo "==> Rust binary not found, building jtag-mcp-rs..."
+  if command -v cargo &>/dev/null; then
+    cargo build --release --manifest-path "$REPO_DIR/jtag-mcp-rs/Cargo.toml"
+    claude mcp add jtag-mcp -s project -- "$JTAG_RS"
+  else
+    echo "==> cargo not found, falling back to Python jtag-mcp..."
+    claude mcp add jtag-mcp -s project -- \
+      "$REPO_DIR/.venv/bin/python" "$REPO_DIR/jtag-mcp/server.py"
+  fi
+fi
 
 echo ""
 echo "Done! MCP servers registered:"
