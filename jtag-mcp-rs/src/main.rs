@@ -21,6 +21,24 @@ const HFSR: u64 = 0xE000_ED2C;
 const BFAR: u64 = 0xE000_ED38;
 const MMFAR: u64 = 0xE000_ED34;
 
+// CoreDebug / DWT registers (Cortex-M4)
+const DEMCR: u64 = 0xE000_EDFC; // Debug Exception and Monitor Control
+const DWT_CTRL: u64 = 0xE000_1000; // DWT Control (bits [31:28] = NUMCOMP)
+const DWT_COMP_BASE: u64 = 0xE000_1020; // COMP0; each unit is 0x10 bytes apart
+
+// STM32WL55 CM4 has 4 DWT comparator units
+const DWT_MAX_COMPARATORS: usize = 4;
+
+fn dwt_comp(unit: usize) -> u64 { DWT_COMP_BASE + (unit as u64) * 0x10 }
+fn dwt_mask(unit: usize) -> u64 { DWT_COMP_BASE + (unit as u64) * 0x10 + 0x4 }
+fn dwt_func(unit: usize) -> u64 { DWT_COMP_BASE + (unit as u64) * 0x10 + 0x8 }
+
+// DWT FUNCTION[3:0] values for halt-mode data watchpoints
+const DWT_FUNC_DISABLED: u32 = 0b0000;
+const DWT_FUNC_READ: u32 = 0b0101;
+const DWT_FUNC_WRITE: u32 = 0b0110;
+const DWT_FUNC_READ_WRITE: u32 = 0b0111;
+
 // Exception frame offsets from SP
 const EXC_FRAME: &[(u32, &str)] = &[
     (0x00, "R0"),
@@ -114,6 +132,15 @@ fn do_read_registers() -> Result<String> {
         }
     }
 
+    // xPSR and CONTROL
+    if let Ok(val) = core.read_core_reg::<u32>(XPSR.id()) {
+        lines.push(format!("  {:<8} = 0x{:08X}", "xPSR", val));
+    }
+    // probe-rs packs CONTROL[31:24] | FAULTMASK[23:16] | BASEPRI[15:8] | PRIMASK[7:0] at id 0b10100
+    if let Ok(val) = core.read_core_reg::<u32>(0b10100u16) {
+        lines.push(format!("  {:<8} = 0x{:08X}  (CONTROL[31:24] FAULTMASK[23:16] BASEPRI[15:8] PRIMASK[7:0])", "EXTRA", val));
+    }
+
     core.run()?;
     Ok(lines.join("\n"))
 }
@@ -140,6 +167,46 @@ fn do_read_memory(address: u64, length: u32) -> Result<String> {
         .collect();
 
     Ok(lines.join("\n"))
+}
+
+fn do_write_memory(address: u64, data: &str) -> Result<String> {
+    // Accept hex strings with or without spaces/0x prefixes, e.g. "DEADBEEF" or "DE AD BE EF"
+    let clean: String = data.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    anyhow::ensure!(
+        clean.len() % 2 == 0,
+        "Hex data must have an even number of nibbles, got {} ('{}')",
+        clean.len(),
+        data
+    );
+    let bytes: Vec<u8> = (0..clean.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&clean[i..i + 2], 16))
+        .collect::<std::result::Result<_, _>>()?;
+
+    let mut session = open_session()?;
+    let mut core = session.core(0)?;
+    core.halt(std::time::Duration::from_millis(500))?;
+    core.write_8(address, &bytes)?;
+    core.run()?;
+
+    Ok(format!(
+        "Wrote {} byte(s) to 0x{:08X}: {}",
+        bytes.len(),
+        address,
+        bytes.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
+    ))
+}
+
+fn do_reset_target() -> Result<String> {
+    let mut session = open_session()?;
+    let mut core = session.core(0)?;
+    core.reset_and_halt(std::time::Duration::from_millis(500))?;
+    let pc: u32 = core.read_core_reg(core.program_counter())?;
+    core.run()?;
+    Ok(format!(
+        "Target reset. PC after reset = 0x{:08X}. CPU resumed.",
+        pc
+    ))
 }
 
 fn do_read_call_stack() -> Result<String> {
@@ -244,6 +311,111 @@ fn do_diagnose_hardfault() -> Result<String> {
     Ok(lines.join("\n"))
 }
 
+fn do_set_breakpoint(address: u64) -> Result<String> {
+    let mut session = open_session()?;
+    let mut core = session.core(0)?;
+    let available = core.available_breakpoint_units()?;
+    core.set_hw_breakpoint(address)?;
+    Ok(format!(
+        "Breakpoint set at 0x{:08X} ({} HW breakpoint unit(s) available on this target)",
+        address, available
+    ))
+}
+
+fn do_clear_breakpoint(address: u64) -> Result<String> {
+    let mut session = open_session()?;
+    let mut core = session.core(0)?;
+    core.clear_hw_breakpoint(address)?;
+    Ok(format!("Breakpoint cleared at 0x{:08X}", address))
+}
+
+fn do_set_watchpoint(address: u64, kind: &str) -> Result<String> {
+    let func_val = match kind {
+        "read" => DWT_FUNC_READ,
+        "write" => DWT_FUNC_WRITE,
+        "read_write" | "rw" => DWT_FUNC_READ_WRITE,
+        _ => anyhow::bail!(
+            "Invalid watchpoint kind '{}'. Use 'read', 'write', or 'read_write'",
+            kind
+        ),
+    };
+
+    let mut session = open_session()?;
+    let mut core = session.core(0)?;
+    core.halt(std::time::Duration::from_millis(500))?;
+
+    // Enable DWT via DEMCR.TRCENA (bit 24) — required before accessing DWT registers
+    let mut buf = [0u32; 1];
+    core.read_32(DEMCR, &mut buf)?;
+    core.write_32(DEMCR, &[buf[0] | (1 << 24)])?;
+
+    // Read NUMCOMP from DWT_CTRL bits [31:28]
+    core.read_32(DWT_CTRL, &mut buf)?;
+    let num_comp = ((buf[0] >> 28) & 0xF) as usize;
+    let max = num_comp.min(DWT_MAX_COMPARATORS);
+
+    // Find a free comparator (FUNCTION[3:0] == 0)
+    let mut free_unit = None;
+    for i in 0..max {
+        core.read_32(dwt_func(i), &mut buf)?;
+        if buf[0] & 0xF == DWT_FUNC_DISABLED {
+            free_unit = Some(i);
+            break;
+        }
+    }
+
+    let unit = free_unit.with_context(|| {
+        format!("No free DWT comparator units — all {} in use", max)
+    })?;
+
+    core.write_32(dwt_comp(unit), &[address as u32])?; // comparator address
+    core.write_32(dwt_mask(unit), &[0u32])?;            // exact address match (mask = 0)
+    core.write_32(dwt_func(unit), &[func_val])?;        // enable watchpoint
+
+    core.run()?;
+
+    Ok(format!(
+        "Watchpoint set: {} at 0x{:08X} (DWT comparator unit {})",
+        kind, address, unit
+    ))
+}
+
+fn do_clear_watchpoint(address: u64) -> Result<String> {
+    let mut session = open_session()?;
+    let mut core = session.core(0)?;
+    core.halt(std::time::Duration::from_millis(500))?;
+
+    // Enable TRCENA so DWT registers are accessible
+    let mut buf = [0u32; 1];
+    core.read_32(DEMCR, &mut buf)?;
+    core.write_32(DEMCR, &[buf[0] | (1 << 24)])?;
+
+    let mut cleared_units = Vec::new();
+    for i in 0..DWT_MAX_COMPARATORS {
+        core.read_32(dwt_func(i), &mut buf)?;
+        if buf[0] & 0xF == DWT_FUNC_DISABLED {
+            continue; // already disabled, skip
+        }
+        core.read_32(dwt_comp(i), &mut buf)?;
+        if buf[0] as u64 == address {
+            core.write_32(dwt_func(i), &[DWT_FUNC_DISABLED])?;
+            cleared_units.push(i);
+        }
+    }
+
+    core.run()?;
+
+    if cleared_units.is_empty() {
+        Ok(format!("No active watchpoint found at 0x{:08X}", address))
+    } else {
+        Ok(format!(
+            "Watchpoint cleared at 0x{:08X} (unit(s): {})",
+            address,
+            cleared_units.iter().map(|u| u.to_string()).collect::<Vec<_>>().join(", ")
+        ))
+    }
+}
+
 // ── MCP server ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -268,8 +440,35 @@ struct ReadMemoryParams {
     length: u32,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct WriteMemoryParams {
+    /// Start address (e.g. 536870912 for 0x20000000 SRAM)
+    address: u64,
+    /// Bytes to write as a hex string, with or without spaces (e.g. "DEADBEEF" or "DE AD BE EF")
+    data: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct AddressParam {
+    /// Target address (e.g. 134225666 for 0x08004102)
+    address: u64,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct WatchpointParams {
+    /// Address to watch (e.g. 536870912 for 0x20000000)
+    address: u64,
+    /// Watchpoint kind: "read", "write", or "read_write" (default: "write")
+    #[serde(default = "default_watchpoint_kind")]
+    kind: String,
+}
+
 fn default_length() -> u32 {
     64
+}
+
+fn default_watchpoint_kind() -> String {
+    "write".to_string()
 }
 
 #[tool_router]
@@ -284,6 +483,11 @@ impl JtagMcp {
         do_resume_cpu().unwrap_or_else(|e| format!("ERROR: {}", e))
     }
 
+    #[tool(description = "Reset the target and resume. Returns the PC observed immediately after reset.")]
+    async fn reset_target(&self) -> String {
+        do_reset_target().unwrap_or_else(|e| format!("ERROR: {}", e))
+    }
+
     #[tool(description = "Read key CM4 core registers (PC, LR, SP, R0-R3, R12). Halts then resumes.")]
     async fn read_registers(&self) -> String {
         do_read_registers().unwrap_or_else(|e| format!("ERROR: {}", e))
@@ -294,6 +498,11 @@ impl JtagMcp {
         do_read_memory(p.address, p.length).unwrap_or_else(|e| format!("ERROR: {}", e))
     }
 
+    #[tool(description = "Write bytes to target memory. Provide address and data as a hex string (e.g. 'DEADBEEF'). Halts CPU during write.")]
+    async fn write_memory(&self, Parameters(p): Parameters<WriteMemoryParams>) -> String {
+        do_write_memory(p.address, &p.data).unwrap_or_else(|e| format!("ERROR: {}", e))
+    }
+
     #[tool(description = "Halt CPU and read the exception frame from the stack. Best called immediately after a HardFault.")]
     async fn read_call_stack(&self) -> String {
         do_read_call_stack().unwrap_or_else(|e| format!("ERROR: {}", e))
@@ -302,6 +511,26 @@ impl JtagMcp {
     #[tool(description = "Read and decode Cortex-M fault status registers (HFSR + CFSR + BFAR + MMFAR). Call immediately after a HardFault.")]
     async fn diagnose_hardfault(&self) -> String {
         do_diagnose_hardfault().unwrap_or_else(|e| format!("ERROR: {}", e))
+    }
+
+    #[tool(description = "Set a hardware breakpoint at the given address (uses FPB unit). CPU halts when PC reaches this address.")]
+    async fn set_breakpoint(&self, Parameters(p): Parameters<AddressParam>) -> String {
+        do_set_breakpoint(p.address).unwrap_or_else(|e| format!("ERROR: {}", e))
+    }
+
+    #[tool(description = "Clear a hardware breakpoint previously set at the given address.")]
+    async fn clear_breakpoint(&self, Parameters(p): Parameters<AddressParam>) -> String {
+        do_clear_breakpoint(p.address).unwrap_or_else(|e| format!("ERROR: {}", e))
+    }
+
+    #[tool(description = "Set a DWT data watchpoint. CPU halts when the watched address is accessed. kind = 'read', 'write' (default), or 'read_write'.")]
+    async fn set_watchpoint(&self, Parameters(p): Parameters<WatchpointParams>) -> String {
+        do_set_watchpoint(p.address, &p.kind).unwrap_or_else(|e| format!("ERROR: {}", e))
+    }
+
+    #[tool(description = "Clear a DWT data watchpoint at the given address.")]
+    async fn clear_watchpoint(&self, Parameters(p): Parameters<AddressParam>) -> String {
+        do_clear_watchpoint(p.address).unwrap_or_else(|e| format!("ERROR: {}", e))
     }
 }
 
