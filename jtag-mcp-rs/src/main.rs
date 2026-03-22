@@ -325,7 +325,9 @@ fn do_set_breakpoint(address: u64) -> Result<String> {
 fn do_clear_breakpoint(address: u64) -> Result<String> {
     let mut session = open_session()?;
     let mut core = session.core(0)?;
+    core.halt(std::time::Duration::from_millis(500))?;
     core.clear_hw_breakpoint(address)?;
+    core.run()?;
     Ok(format!("Breakpoint cleared at 0x{:08X}", address))
 }
 
