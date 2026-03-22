@@ -23,6 +23,8 @@ const MMFAR: u64 = 0xE000_ED34;
 
 // CoreDebug / DWT registers (Cortex-M4)
 const DEMCR: u64 = 0xE000_EDFC; // Debug Exception and Monitor Control
+const FP_CTRL: u64 = 0xE000_2000; // FPB Control (bits [7:4] = NUM_CODE)
+const FP_COMP_BASE: u64 = 0xE000_2008; // FP_COMP0; each unit is 4 bytes apart
 const DWT_CTRL: u64 = 0xE000_1000; // DWT Control (bits [31:28] = NUMCOMP)
 const DWT_COMP_BASE: u64 = 0xE000_1020; // COMP0; each unit is 0x10 bytes apart
 
@@ -326,9 +328,44 @@ fn do_clear_breakpoint(address: u64) -> Result<String> {
     let mut session = open_session()?;
     let mut core = session.core(0)?;
     core.halt(std::time::Duration::from_millis(500))?;
-    core.clear_hw_breakpoint(address)?;
+
+    // probe-rs clear_hw_breakpoint fails when called from a new session that didn't
+    // set the breakpoint (no internal state). Use raw FPB register access instead.
+    //
+    // FP_CTRL[7:4] = NUM_CODE (number of code comparators)
+    // FP_COMPn[28:2] = COMP address bits, FP_COMPn[0] = ENABLE
+    // To clear: find the comparator matching address, write 0 to disable it.
+    let mut buf = [0u32; 1];
+    core.read_32(FP_CTRL, &mut buf)?;
+    let num_code = ((buf[0] >> 4) & 0xF) as u64;
+
+    let target_masked = (address as u32) & 0x1FFF_FFFC; // address bits [28:2] in place
+    let mut cleared_unit: Option<u64> = None;
+
+    for i in 0..num_code {
+        let comp_reg = FP_COMP_BASE + i * 4;
+        core.read_32(comp_reg, &mut buf)?;
+        let enabled = buf[0] & 1;
+        let comp_masked = buf[0] & 0x1FFF_FFFC;
+        if enabled != 0 && comp_masked == target_masked {
+            core.write_32(comp_reg, &[0u32])?;
+            cleared_unit = Some(i);
+            break;
+        }
+    }
+
     core.run()?;
-    Ok(format!("Breakpoint cleared at 0x{:08X}", address))
+
+    match cleared_unit {
+        Some(i) => Ok(format!(
+            "Breakpoint cleared at 0x{:08X} (FPB comparator unit {})",
+            address, i
+        )),
+        None => Ok(format!(
+            "No breakpoint found at 0x{:08X} (may already be cleared)",
+            address
+        )),
+    }
 }
 
 fn do_set_watchpoint(address: u64, kind: &str) -> Result<String> {

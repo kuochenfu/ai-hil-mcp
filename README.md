@@ -211,7 +211,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 |---|------|----------|---------------------|
 | 2.1 | JTAG/SWD MCP Server (pyocd) | ✅ | **Done** — registers, memory, call stack |
 | 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
-| 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — single binary, hardware-verified on STM32WL55. Tools: `halt_cpu`, `resume_cpu`, `reset_target`, `read_registers`, `read_memory`, `write_memory`, `read_call_stack`, `diagnose_hardfault`, `set_breakpoint`, `clear_breakpoint`, `set_watchpoint`, `clear_watchpoint` |
+| 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — all 12 tools hardware-verified on STM32WL55. Active debugging confirmed: DWT watchpoint halted CPU in `HAL_IncTick` writing `uwTick`; FPB breakpoint halted CPU at exact target address. `clear_breakpoint` uses raw FPB scan (probe-rs clears FPB on session open). |
 | 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured) |
 | 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — hardware-verified: build → flash → serial confirmed on STM32WL55 |
 | 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
@@ -273,7 +273,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 |------|-----------|
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
 | [2026-03-21](doc/2026-03-21.md) | Phase 2.2b/c/d — All 3 MCP servers ported to Rust and hardware-verified on STM32WL55 |
-| [2026-03-22](doc/2026-03-22.md) | `jtag-mcp-rs` expanded: +6 tools (reset, write_memory, breakpoints, watchpoints), xPSR/EXTRA in read_registers |
+| [2026-03-22](doc/2026-03-22.md) | `jtag-mcp-rs` expanded to full active debugger — all 12 tools hardware-verified; DWT watchpoint halt confirmed in SysTick ISR; FPB cross-session limitation documented |
 
 ---
 
