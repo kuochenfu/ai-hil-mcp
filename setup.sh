@@ -69,8 +69,22 @@ else
   fi
 fi
 
+PPK2_RS="$REPO_DIR/ppk2-mcp-rs/target/release/ppk2-mcp-rs"
+if [ -f "$PPK2_RS" ]; then
+  echo "==> Using Rust ppk2-mcp-rs binary..."
+  claude mcp add ppk2-mcp -s project -- "$PPK2_RS"
+else
+  echo "==> Rust binary not found, building ppk2-mcp-rs..."
+  if command -v cargo &>/dev/null; then
+    cargo build --release --manifest-path "$REPO_DIR/ppk2-mcp-rs/Cargo.toml"
+    claude mcp add ppk2-mcp -s project -- "$PPK2_RS"
+  else
+    echo "==> cargo not found, skipping ppk2-mcp (no Python fallback)"
+  fi
+fi
+
 echo ""
 echo "Done! MCP servers registered:"
-claude mcp list | grep -E "serial-mcp|build-flash-mcp|jtag-mcp"
+claude mcp list | grep -E "serial-mcp|build-flash-mcp|jtag-mcp|ppk2-mcp"
 echo ""
 echo "To verify, run: claude mcp list"

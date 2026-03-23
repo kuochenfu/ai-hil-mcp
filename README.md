@@ -1,6 +1,6 @@
 # AI-HIL Embedded Dev Automation
 
-**Version:** v1.5 · 2026-03-22
+**Version:** v1.6 · 2026-03-23
 
 > Give a single engineer the development, debugging, and verification capacity of a 3–5 person hardware team — through AI-assisted closed-loop automation.
 
@@ -53,7 +53,7 @@ Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). E
 | `serial-mcp` | :8001 | `pyserial` (Python) · `serialport` (Rust) | Read UART logs, detect anomalies (`HardFault`, `Panic`, `Watchdog`) |
 | `jtag-mcp` | :8002 | `pyocd` (Python) · `probe-rs` (Rust) | Call stack, register/memory read, HardFault semantic diagnosis |
 | `vision-mcp` | :8003 | `opencv-python` | LED state detection, LCD OCR, frame capture |
-| `ppk2-mcp` | :8004 | `ppk2-api` | Current measurement, Deep Sleep verification, RF burst detection |
+| `ppk2-mcp` | stdio | `ppk2` (Rust) | Current measurement, power state profiling, pin-triggered capture, battery life estimate |
 | `build-flash-mcp` | :8005 | `subprocess` (Python) · `std::process::Command` (Rust) | Firmware build/flash/erase via CMake + OpenOCD |
 | `power-control-mcp` | :8006 | `pyusb` / `gpiozero` | Hard reset, power cycle via USB relay |
 | `sdr-mcp` *(Phase 4)* | :8007 | `pyrtlsdr` | RF spectrum scan, noise floor, emission detection |
@@ -214,7 +214,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 | 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — all 12 tools hardware-verified on STM32WL55. Active debugging confirmed: DWT watchpoint halted CPU in `HAL_IncTick` writing `uwTick`; FPB breakpoint halted CPU at exact target address. `clear_breakpoint` uses raw FPB scan (probe-rs clears FPB on session open). |
 | 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured) |
 | 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — hardware-verified: build → flash → serial confirmed on STM32WL55 |
-| 2.3 | PPK2 MCP Server | ❌ Nordic PPK2 | `measure_current()` validates Deep Sleep current |
+| 2.3 | PPK2 MCP Server (`ppk2-mcp-rs`) | ✅ | **Done** — 7 tools hardware-verified on STM32WL55: `measure_current`, `profile_power_states`, `measure_with_pin_trigger`, `estimate_battery_life`, `set_dut_power`, `find_ppk2`, `get_metadata`. Dual-port macOS issue resolved. |
 | 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
 
@@ -274,12 +274,17 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
 | [2026-03-21](doc/2026-03-21.md) | Phase 2.2b/c/d — All 3 MCP servers ported to Rust and hardware-verified on STM32WL55 |
 | [2026-03-22](doc/2026-03-22.md) | `jtag-mcp-rs` expanded to full active debugger — all 12 tools hardware-verified; DWT watchpoint halt confirmed in SysTick ISR; FPB cross-session limitation documented |
+| [2026-03-23](doc/2026-03-23.md) | Phase 2.3 complete — `ppk2-mcp-rs` implemented with 7 tools; dual-port macOS issue resolved; first measurement: 11 mA avg on active STM32WL55 (JP1 removed, PPK2 as sole supply) |
 
 ---
 
-## Full Specification
+## Documentation
 
-See [`doc/AIHIL_embedded_dev_automation.md`](doc/AIHIL_embedded_dev_automation.md) for the complete architectural proposal including Mermaid diagrams, example MCP server code skeletons, and Claude Code prompt templates.
+| Document | Description |
+|----------|-------------|
+| [`doc/user-manual.md`](doc/user-manual.md) | Complete user manual — all MCP servers, SOPs, safety constraints, quick reference |
+| [`doc/user-manual-ppk2.md`](doc/user-manual-ppk2.md) | PPK2 power profiling deep-dive — hardware setup, all tools, workflows, troubleshooting |
+| [`doc/AIHIL_embedded_dev_automation.md`](doc/AIHIL_embedded_dev_automation.md) | Full architectural specification with diagrams and design rationale |
 
 ---
 

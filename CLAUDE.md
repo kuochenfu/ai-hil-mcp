@@ -17,6 +17,7 @@ and validate physical embedded hardware via MCP servers.
 | `serial-mcp` | `list_serial_ports`, `read_serial_log`, `send_serial_command` | `serial-mcp-rs` |
 | `jtag-mcp` | `halt_cpu`, `resume_cpu`, `read_registers`, `read_memory`, `read_call_stack`, `diagnose_hardfault` | `jtag-mcp-rs` |
 | `build-flash-mcp` | `build_firmware`, `clean_build`, `get_build_size`, `flash_firmware` | `build-flash-mcp-rs` |
+| `ppk2-mcp` | `find_ppk2`, `measure_current`, `profile_power_states`, `measure_with_pin_trigger`, `estimate_battery_life`, `set_dut_power`, `get_metadata` | `ppk2-mcp-rs` |
 
 ## Target Hardware
 
@@ -24,6 +25,7 @@ and validate physical embedded hardware via MCP servers.
 - Serial port: `/dev/cu.usbmodem1303` @ 115200 baud
 - Firmware project: `/Users/chenfu/Labs/stm_projects/synapse-lora/CM4`, preset `Debug`
 - Debugger: ST-Link V3 via `jtag-mcp`
+- **Nordic PPK2** — power measurement via `ppk2-mcp` (auto-detect port with `find_ppk2`)
 
 ---
 
@@ -35,6 +37,8 @@ and validate physical embedded hardware via MCP servers.
 - **Wait 3s** after flash before reading serial (board needs time to boot)
 - Watchdog timeout is 2s — do not halt CPU for more than 1.5s during live diagnosis
 - If `diagnose_hardfault` shows `FORCED` in HFSR, always check CFSR for root cause before touching code
+- **PPK2**: Never set `source_meter` voltage above the DUT's rated VDD (STM32WL55: max 3.6V → use 3300 mV)
+- **PPK2**: `measure_current` automatically disables DUT power after the measurement — no manual cleanup needed
 
 ---
 
