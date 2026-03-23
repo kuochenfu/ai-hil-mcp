@@ -274,7 +274,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | [2026-03-19](doc/2026-03-19.md) | Phase 1 + 2.1/2.2 complete — Serial, Build & Flash, JTAG MCPs hardware-tested on STM32WL55 |
 | [2026-03-21](doc/2026-03-21.md) | Phase 2.2b/c/d — All 3 MCP servers ported to Rust and hardware-verified on STM32WL55 |
 | [2026-03-22](doc/2026-03-22.md) | `jtag-mcp-rs` expanded to full active debugger — all 12 tools hardware-verified; DWT watchpoint halt confirmed in SysTick ISR; FPB cross-session limitation documented |
-| [2026-03-23](doc/2026-03-23.md) | Phase 2.3 complete — `ppk2-mcp-rs` implemented with 7 tools; dual-port macOS issue resolved; first measurement: 11 mA avg on active STM32WL55 (JP1 removed, PPK2 as sole supply) |
+| [2026-03-23](doc/2026-03-23.md) | Phase 2.3 complete — `ppk2-mcp-rs` implemented and all 7 tools fully hardware-verified; dual-port macOS issue resolved; active-low button confirmed on pin 0; battery estimate: 6.3 days on 2000 mAh @ 13 mA avg |
 
 ---
 

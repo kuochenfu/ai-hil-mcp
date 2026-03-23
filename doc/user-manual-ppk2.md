@@ -70,6 +70,53 @@ Energy:     108953.98 µJ  (0.0303 mWh)
 
 ---
 
+## Prompt Examples
+
+Just describe what you want in plain English — Claude Code will call the right tools automatically.
+
+---
+
+**Example 1 — Quick power check after flashing**
+
+> "Measure the current on the STM32 for 5 seconds and tell me if it looks healthy."
+
+Claude will run `find_ppk2` → `measure_current(duration_s=5)` and interpret the result:
+```
+Measurement complete (5.0s, 4995 samples)
+Avg: 12.75 mA  p95: 18.77 mA  Peak/Avg: 1.7x
+→ Consistent with active LoRa PING/PONG loop. No spike detected.
+```
+
+---
+
+**Example 2 — Power state breakdown**
+
+> "Profile the power states of the board — I want to know how much time it spends in sleep vs TX."
+
+Claude will run `profile_power_states(duration_s=10)` and highlight the dominant state:
+```
+Power State Profile (10.0s)
+< 1 µA    (deep sleep)   4.2%
+1–10 mA   (active)       7.1%
+> 10 mA   (TX / peak)   88.7%  ← dominant
+→ Board is mostly transmitting. Sleep state is nearly absent — check low-power mode config.
+```
+
+---
+
+**Example 3 — Battery life estimate before shipping**
+
+> "How long will this device last on a 2000 mAh battery?"
+
+Claude will run `estimate_battery_life(battery_capacity_mah=2000, duration_s=10)` and summarize:
+```
+Avg current: 13.21 mA @ 3300 mV → 43.6 mW average power
+Estimated runtime: 151 hours (6.3 days)
+→ Below the 10-day target. Consider enabling deep sleep between LoRa cycles.
+```
+
+---
+
 ## Tools Reference
 
 ### `find_ppk2`
@@ -151,16 +198,18 @@ Connect a GPIO from your DUT to the PPK2 logic input header. The tool captures c
 - Measure sleep current: trigger LOW on the active indicator GPIO
 - Profile DMA burst power: trigger on DMA active signal
 
-**Example output:**
+> **NUCLEO-WL55JC1 note**: The on-board user button (B1) is **active-low** — it pulls the logic pin LOW when pressed. Use `trigger_level="low"` when testing with this button. Using `trigger_level="high"` will return no matched samples.
+
+**Example output (NUCLEO button held, pin 0, active-low):**
 ```
-Pin-triggered Measurement (pin 0 = high, 3.0s)
-Matched samples:  312 / 3000 (10.4% of time pin was high)
-────────────────────────────
-Min:     14.20 mA
-Max:     22.81 mA
-Avg:     18.34 mA
-Std dev: 2.10 mA
-p50:     18.10 mA  p95: 21.90 mA  p99: 22.50 mA
+Pin-triggered Measurement (pin 0 = low, 10.0s)
+Matched samples:  9995 / 9995 (100.0% of time pin was low)
+────────────────────────────────────────
+Min:     -1.48 µA
+Max:     51.47 mA
+Avg:     18.31 mA
+Std dev: 4.47 mA
+p50:     18.50 mA  p95: 23.19 mA  p99: 23.24 mA
 ```
 
 ---

@@ -14,6 +14,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 use std::{
+    sync::{Arc, Mutex, mpsc::{self, SyncSender}},
     thread,
     time::{Duration, Instant},
 };
@@ -35,6 +36,15 @@ const BUCKETS: &[(&str, f32, f32)] = &[
     ("1–10 mA   (active)",     1_000.0,           10_000.0),
     ("> 10 mA   (TX / peak)",  10_000.0,          f32::INFINITY),
 ];
+
+// --- Persistent power hold (background thread keeps PPK2 connection open) ---
+
+/// Dropping this struct signals the background thread to stop and power off the DUT.
+#[derive(Debug)]
+struct PowerHold {
+    #[allow(dead_code)] // intentionally held for its Drop side-effect (signals background thread)
+    stop_tx: SyncSender<()>,
+}
 
 // --- Helpers ---
 
@@ -146,9 +156,10 @@ fn collect_samples(
     (samples, no_match_count)
 }
 
-fn stop_and_reset(stop: impl FnOnce() -> ppk2::Result<Ppk2>) -> Result<()> {
-    let ppk2 = stop().map_err(|e| anyhow::anyhow!("{}", e))?;
-    ppk2.reset().map_err(|e| anyhow::anyhow!("{}", e))?;
+fn stop_and_power_off(stop: impl FnOnce() -> ppk2::Result<Ppk2>) -> Result<()> {
+    let mut ppk2 = stop().map_err(|e| anyhow::anyhow!("{}", e))?;
+    ppk2.set_device_power(DevicePower::Disabled)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
     Ok(())
 }
 
@@ -188,7 +199,7 @@ fn do_measure_current(port: &str, mode: &str, voltage_mv: u16, duration_s: f32) 
     let ppk2 = open_ppk2(port, mmode)?;
     let (rx, stop) = setup_and_start(ppk2, mmode, voltage_mv)?;
     let (mut samples, _) = collect_samples(&rx, duration_s);
-    stop_and_reset(stop)?;
+    stop_and_power_off(stop)?;
 
     if samples.is_empty() {
         return Ok("No samples collected. Check PPK2 connection and DUT.".to_string());
@@ -234,7 +245,7 @@ fn do_profile_power_states(port: &str, mode: &str, voltage_mv: u16, duration_s: 
     let ppk2 = open_ppk2(port, mmode)?;
     let (rx, stop) = setup_and_start(ppk2, mmode, voltage_mv)?;
     let (mut samples, _) = collect_samples(&rx, duration_s);
-    stop_and_reset(stop)?;
+    stop_and_power_off(stop)?;
 
     if samples.is_empty() {
         return Ok("No samples collected.".to_string());
@@ -328,7 +339,7 @@ fn do_measure_with_pin_trigger(
     let ppk2 = open_ppk2(port, mmode)?;
     let (rx, stop) = setup_and_start_with_pins(ppk2, mmode, voltage_mv, pins)?;
     let (mut matched_samples, no_match) = collect_samples(&rx, duration_s);
-    stop_and_reset(stop)?;
+    stop_and_power_off(stop)?;
 
     let total_samples = matched_samples.len() + no_match;
     let match_pct = if total_samples > 0 {
@@ -373,7 +384,7 @@ fn do_estimate_battery_life(
     let ppk2 = open_ppk2(port, mmode)?;
     let (rx, stop) = setup_and_start(ppk2, mmode, voltage_mv)?;
     let (mut samples, _) = collect_samples(&rx, duration_s);
-    stop_and_reset(stop)?;
+    stop_and_power_off(stop)?;
 
     if samples.is_empty() {
         return Ok("No samples collected.".to_string());
@@ -407,26 +418,6 @@ fn do_estimate_battery_life(
         s.avg * (voltage_mv as f32 / 1000.0),
         "─".repeat(50),
     ))
-}
-
-fn do_set_dut_power(port: &str, mode: &str, voltage_mv: u16, enabled: bool) -> Result<String> {
-    let mmode = parse_mode(mode)?;
-    let mut ppk2 = open_ppk2(port, mmode)?;
-
-    if matches!(mmode, MeasurementMode::Source) {
-        ppk2.set_source_voltage(SourceVoltage::from_millivolts(voltage_mv))
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-    }
-
-    let power = if enabled { DevicePower::Enabled } else { DevicePower::Disabled };
-    ppk2.set_device_power(power).map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    let state_str = if enabled { "ON" } else { "OFF" };
-    if matches!(mmode, MeasurementMode::Source) {
-        Ok(format!("DUT power {}: {} mV (source meter mode)", state_str, voltage_mv))
-    } else {
-        Ok(format!("DUT power {}: ampere meter mode (external supply)", state_str))
-    }
 }
 
 fn do_get_metadata(port: &str) -> Result<String> {
@@ -538,11 +529,17 @@ fn default_battery_duration_s() -> f32 { 5.0 }
 #[derive(Debug, Clone)]
 struct Ppk2Server {
     tool_router: ToolRouter<Self>,
+    /// Holds the background thread that keeps the PPK2 connection open for set_dut_power(enabled=true).
+    /// Dropping the PowerHold sends a stop signal to the thread, which then powers off the DUT.
+    power_hold: Arc<Mutex<Option<PowerHold>>>,
 }
 
 impl Ppk2Server {
     fn new() -> Self {
-        Self { tool_router: Self::tool_router() }
+        Self {
+            tool_router: Self::tool_router(),
+            power_hold: Arc::new(Mutex::new(None)),
+        }
     }
 }
 
@@ -577,10 +574,86 @@ impl Ppk2Server {
             .unwrap_or_else(|e| format!("ERROR: {}", e))
     }
 
-    #[tool(description = "Enable or disable DUT power via PPK2 without running a measurement. Use for setup, teardown, or manual power cycling.")]
+    #[tool(description = "Enable or disable DUT power via PPK2 without running a measurement. enabled=true spawns a background thread that holds the PPK2 connection open (PPK2 cuts power when connection closes). enabled=false signals that thread to stop, which powers off the DUT and closes the connection.")]
     async fn set_dut_power(&self, Parameters(p): Parameters<DutPowerParams>) -> String {
-        do_set_dut_power(&p.port, &p.mode, p.voltage_mv, p.enabled)
-            .unwrap_or_else(|e| format!("ERROR: {}", e))
+        let power_hold = Arc::clone(&self.power_hold);
+
+        if p.enabled {
+            let port = p.port.clone();
+            let mode_str = p.mode.clone();
+            let voltage_mv = p.voltage_mv;
+
+            // Open PPK2 and enable power in a blocking thread (serial I/O is sync).
+            // On success, move the Ppk2 handle into a hold thread that blocks until stop signal.
+            let result = tokio::task::spawn_blocking(move || -> Result<SyncSender<()>, String> {
+                let mmode = parse_mode(&mode_str).map_err(|e| e.to_string())?;
+                let mut ppk2 = open_ppk2(&port, mmode).map_err(|e| e.to_string())?;
+
+                if matches!(mmode, MeasurementMode::Source) {
+                    ppk2.set_source_voltage(SourceVoltage::from_millivolts(voltage_mv))
+                        .map_err(|e| e.to_string())?;
+                }
+                ppk2.set_device_power(DevicePower::Enabled)
+                    .map_err(|e| e.to_string())?;
+
+                // Spawn the hold thread. It owns the Ppk2 handle and keeps the serial
+                // connection open. Dropping stop_tx causes stop_rx.recv() to return Err,
+                // which unblocks the thread → powers off DUT → port closes.
+                let (stop_tx, stop_rx) = mpsc::sync_channel::<()>(1);
+                thread::spawn(move || {
+                    let _ = stop_rx.recv(); // blocks until PowerHold is dropped
+                    let _ = ppk2.set_device_power(DevicePower::Disabled);
+                    // ppk2 drops here, serial port closes
+                });
+
+                Ok(stop_tx)
+            }).await;
+
+            match result {
+                Ok(Ok(stop_tx)) => {
+                    *power_hold.lock().unwrap() = Some(PowerHold { stop_tx });
+                    if matches!(parse_mode(&p.mode).unwrap_or(MeasurementMode::Source), MeasurementMode::Source) {
+                        format!("DUT power ON: {} mV (source meter mode)\nBackground thread holding connection open.", p.voltage_mv)
+                    } else {
+                        "DUT power ON: ampere meter mode (external supply)\nBackground thread holding connection open.".to_string()
+                    }
+                }
+                Ok(Err(e)) => format!("ERROR: {}", e),
+                Err(e) => format!("ERROR: task failed: {}", e),
+            }
+        } else {
+            // Drop the PowerHold: this drops stop_tx, unblocking the hold thread,
+            // which calls set_device_power(Disabled) before the port closes.
+            let had_hold = {
+                let mut guard = power_hold.lock().unwrap();
+                let had = guard.is_some();
+                *guard = None; // drops PowerHold → drops stop_tx → thread exits
+                had
+            };
+
+            if !had_hold {
+                // No background thread was running — directly power off.
+                let port = p.port.clone();
+                let mode_str = p.mode.clone();
+                let voltage_mv = p.voltage_mv;
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Ok(mmode) = parse_mode(&mode_str) {
+                        if let Ok(mut ppk2) = open_ppk2(&port, mmode) {
+                            if matches!(mmode, MeasurementMode::Source) {
+                                let _ = ppk2.set_source_voltage(SourceVoltage::from_millivolts(voltage_mv));
+                            }
+                            let _ = ppk2.set_device_power(DevicePower::Disabled);
+                        }
+                    }
+                }).await;
+            }
+
+            if matches!(parse_mode(&p.mode).unwrap_or(MeasurementMode::Source), MeasurementMode::Source) {
+                format!("DUT power OFF: {} mV (source meter mode)", p.voltage_mv)
+            } else {
+                "DUT power OFF: ampere meter mode (external supply)".to_string()
+            }
+        }
     }
 
     #[tool(description = "Read PPK2 device metadata: calibration status, current VDD setting, hardware version, and measurement mode.")]
