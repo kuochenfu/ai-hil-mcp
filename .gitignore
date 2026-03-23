@@ -11,3 +11,4 @@ __pycache__/
 jtag-mcp-rs/target/
 serial-mcp-rs/target/
 build-flash-mcp-rs/target/
+ppk2-mcp-rs/target/
