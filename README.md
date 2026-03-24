@@ -171,7 +171,7 @@ When Claude Code encounters a hardware issue:
 | Target Board | NUCLEO-WL55JC1 (STM32WL) | $35–45 | P0 |
 | Target Board | ESP32-S3-DevKitC-1 | $10–15 | P1 |
 | Power Profiler | Nordic PPK2 | $90–100 | P0 |
-| Webcam | Logitech MX Brio Ultra 4K | $199 | P1 |
+| Webcam | Logitech C920 / C922 (recommended) | $50–70 | P1 |
 | USB Hub | Powered 7-Port USB 3.0 | $20–30 | P0 |
 
 ### Phase 3–4 (Advanced) — $910–1,020 USD (incl. workstation)

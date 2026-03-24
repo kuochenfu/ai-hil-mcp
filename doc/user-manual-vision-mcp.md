@@ -1,8 +1,8 @@
 # vision-mcp User Manual
 
-**Version:** 1.0 · 2026-03-25
+**Version:** 1.1 · 2026-03-25
 
-> Visual perception layer for AI-HIL — frame capture, software PTZ, image adjustment, and LED state detection using the Logitech MX Brio Ultra 4K camera.
+> Visual perception layer for AI-HIL — frame capture, software PTZ, image adjustment, and LED state detection via any UVC USB camera.
 
 ---
 
@@ -26,14 +26,45 @@
 
 ---
 
+## Camera Selection
+
+### macOS UVC limitations
+
+Before choosing a camera, understand what macOS actually allows `vision-mcp` to control:
+
+macOS kernel driver (`AppleUSBVideoSupport`) claims the UVC VideoControl interface while the camera is active. This means:
+
+- **Direct UVC control transfers via `pyusb` are blocked** — the kernel intercepts them
+- **OpenCV's AVFoundation backend returns 0 (read-only) for all camera properties** — brightness, contrast, pan, tilt, focus, exposure, white balance, zoom — only resolution and FPS are writable
+- **All PTZ and image adjustments in `vision-mcp` are software workarounds** — post-capture crop/resize and OpenCV transforms applied to the captured frame
+
+Practically, **any 1080p UVC webcam delivers the same functional result as a 4K camera** for AI-HIL use cases. The extra sensor resolution and hardware ePTZ of premium cameras like the MX Brio are inaccessible from Claude Code on macOS.
+
+### Recommended cameras
+
+| Camera | Price | Resolution | Notes |
+|--------|-------|-----------|-------|
+| **Logitech C920 / C922** | $50–70 | 1080p | ✅ Recommended — proven macOS UVC compatibility, widely available |
+| Logitech C505 | $30–40 | 720p | Budget option — sufficient for LED detection |
+| Razer Kiyo | $50–60 | 1080p | Built-in ring light — useful for consistent LED illumination |
+| Elgato Facecam | $80–100 | 1080p | Fixed focus, sharp at close range — good for board inspection |
+| Generic 1080p UVC webcam | $15–30 | 1080p | Minimum viable option |
+| Logitech MX Brio Ultra 4K | $199 | 1080p* | ⚠️ Overkill — 4K sensor and hardware ePTZ are inaccessible on macOS |
+
+\* Maximum usable resolution via AVFoundation/OpenCV is 1080p regardless of sensor size.
+
+**Bottom line:** Buy a **Logitech C920** unless you already own a different camera. The C920 costs $130+ less than the MX Brio and delivers identical results in this setup.
+
+---
+
 ## Hardware Setup
 
 ### Camera
 
-- **Supported:** Any UVC USB camera. Verified on **Logitech MX Brio Ultra 4K**
+- **Supported:** Any UVC USB camera. Verified on Logitech MX Brio Ultra 4K (index 0)
 - **macOS camera permission:** Grant access to your terminal app in
   `System Settings → Privacy & Security → Camera`
-- **Camera index:** Run `list_cameras` to find the correct index. MX Brio is typically `0`
+- **Camera index:** Run `list_cameras` to find the correct index
 
 ### Mounting Recommendation
 
@@ -474,7 +505,7 @@ OpenCV may have the camera locked in a capture session. Try calling `set_focus` 
 
 ### Poor 4K / high-resolution captures
 
-AVFoundation on macOS does not support the `3840×2160` preset for the MX Brio. The maximum reliable resolution via OpenCV/AVFoundation is **1920×1080**. The camera's 4K sensor is used internally by the ePTZ firmware, but Claude Code captures at 1080p.
+AVFoundation on macOS does not support the `3840×2160` preset. The maximum reliable resolution via OpenCV/AVFoundation is **1920×1080** regardless of camera sensor size. See [Camera Selection](#camera-selection) for why a 4K camera provides no advantage in this setup.
 
 ---
 
