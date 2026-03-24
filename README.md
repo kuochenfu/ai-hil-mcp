@@ -1,6 +1,6 @@
 # AI-HIL Embedded Dev Automation
 
-**Version:** v1.6 · 2026-03-23
+**Version:** v1.7 · 2026-03-25
 
 > Give a single engineer the development, debugging, and verification capacity of a 3–5 person hardware team — through AI-assisted closed-loop automation.
 
@@ -52,7 +52,7 @@ Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). E
 |--------|------|---------|---------|
 | `serial-mcp` | :8001 | `pyserial` (Python) · `serialport` (Rust) | Read UART logs, detect anomalies (`HardFault`, `Panic`, `Watchdog`) |
 | `jtag-mcp` | :8002 | `pyocd` (Python) · `probe-rs` (Rust) | Call stack, register/memory read, HardFault semantic diagnosis |
-| `vision-mcp` | :8003 | `opencv-python` | LED state detection, LCD OCR, frame capture |
+| `vision-mcp` | stdio | `opencv-python` · `pyobjc-AVFoundation` · `anthropic` | Frame capture, software PTZ, image adjustment, LED detection (OpenCV-first + Claude vision fallback) |
 | `ppk2-mcp` | stdio | `ppk2` (Rust) | Current measurement, power state profiling, pin-triggered capture, battery life estimate |
 | `build-flash-mcp` | :8005 | `subprocess` (Python) · `std::process::Command` (Rust) | Firmware build/flash/erase via CMake + OpenOCD |
 | `power-control-mcp` | :8006 | `pyusb` / `gpiozero` | Hard reset, power cycle via USB relay |
@@ -171,7 +171,7 @@ When Claude Code encounters a hardware issue:
 | Target Board | NUCLEO-WL55JC1 (STM32WL) | $35–45 | P0 |
 | Target Board | ESP32-S3-DevKitC-1 | $10–15 | P1 |
 | Power Profiler | Nordic PPK2 | $90–100 | P0 |
-| Webcam | Logitech C920 / C922 | $60–80 | P1 |
+| Webcam | Logitech MX Brio Ultra 4K | $199 | P1 |
 | USB Hub | Powered 7-Port USB 3.0 | $20–30 | P0 |
 
 ### Phase 3–4 (Advanced) — $910–1,020 USD (incl. workstation)
@@ -215,7 +215,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 | 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured) |
 | 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — hardware-verified: build → flash → serial confirmed on STM32WL55 |
 | 2.3 | PPK2 MCP Server (`ppk2-mcp-rs`) | ✅ | **Done** — 7 tools hardware-verified on STM32WL55: `measure_current`, `profile_power_states`, `measure_with_pin_trigger`, `estimate_battery_life`, `set_dut_power`, `find_ppk2`, `get_metadata`. Dual-port macOS issue resolved. |
-| 2.4 | Vision MCP Server | ❌ Webcam | `detect_led_state()` confirms LED state |
+| 2.4 | Vision MCP Server | ✅ | **Done** — 8 tools: `list_cameras`, `get_camera_info`, `set_resolution`, `set_ptz`, `adjust_image`, `set_focus`, `capture_frame`, `analyze_frame`, `detect_led_state`. Software ePTZ + image adjustments via OpenCV; LED detection OpenCV-first with Claude vision fallback. Verified on Logitech MX Brio Ultra 4K. |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
 
 ### Phase 3 — Closed-Loop Automation (Weeks 6–8)
@@ -275,6 +275,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | [2026-03-21](doc/2026-03-21.md) | Phase 2.2b/c/d — All 3 MCP servers ported to Rust and hardware-verified on STM32WL55 |
 | [2026-03-22](doc/2026-03-22.md) | `jtag-mcp-rs` expanded to full active debugger — all 12 tools hardware-verified; DWT watchpoint halt confirmed in SysTick ISR; FPB cross-session limitation documented |
 | [2026-03-23](doc/2026-03-23.md) | Phase 2.3 complete — `ppk2-mcp-rs` implemented and all 7 tools fully hardware-verified; dual-port macOS issue resolved; active-low button confirmed on pin 0; battery estimate: 6.3 days on 2000 mAh @ 13 mA avg |
+| [2026-03-25](doc/2026-03-25.md) | Phase 2.4 complete — `vision-mcp` implemented with 8 tools; software ePTZ, image adjustments, LED detection (OpenCV-first + Claude vision fallback); verified on Logitech MX Brio Ultra 4K |
 
 ---
 

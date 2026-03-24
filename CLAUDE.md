@@ -18,6 +18,7 @@ and validate physical embedded hardware via MCP servers.
 | `jtag-mcp` | `halt_cpu`, `resume_cpu`, `read_registers`, `read_memory`, `read_call_stack`, `diagnose_hardfault` | `jtag-mcp-rs` |
 | `build-flash-mcp` | `build_firmware`, `clean_build`, `get_build_size`, `flash_firmware` | `build-flash-mcp-rs` |
 | `ppk2-mcp` | `find_ppk2`, `measure_current`, `profile_power_states`, `measure_with_pin_trigger`, `estimate_battery_life`, `set_dut_power`, `get_metadata` | `ppk2-mcp-rs` |
+| `vision-mcp` | `list_cameras`, `get_camera_info`, `set_resolution`, `set_ptz`, `adjust_image`, `set_focus`, `capture_frame`, `analyze_frame`, `detect_led_state` | `vision-mcp/server.py` |
 
 ## Target Hardware
 
@@ -26,6 +27,7 @@ and validate physical embedded hardware via MCP servers.
 - Firmware project: `/Users/chenfu/Labs/stm_projects/synapse-lora/CM4`, preset `Debug`
 - Debugger: ST-Link V3 via `jtag-mcp`
 - **Nordic PPK2** — power measurement via `ppk2-mcp` (auto-detect port with `find_ppk2`)
+- **Logitech MX Brio Ultra 4K** — visual inspection via `vision-mcp` (camera index 0)
 
 ---
 

@@ -47,6 +47,14 @@
       "command": "/Users/chenfu/Labs/ai-hil-mcp/ppk2-mcp-rs/target/release/ppk2-mcp-rs",
       "args": [],
       "env": {}
+    },
+    "vision-mcp": {
+      "type": "stdio",
+      "command": "/Users/chenfu/Labs/ai-hil-mcp/.venv/bin/python",
+      "args": [
+        "/Users/chenfu/Labs/ai-hil-mcp/vision-mcp/server.py"
+      ],
+      "env": {}
     }
   }
 }
