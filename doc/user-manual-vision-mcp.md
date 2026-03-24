@@ -23,6 +23,11 @@
 | `capture_frame` | Perception | Capture a JPEG with current settings applied |
 | `analyze_frame(prompt)` | Perception | Claude vision analysis with current settings applied |
 | `detect_led_state` | Perception | LED color/on-off detection — OpenCV first, Claude fallback |
+| `read_display` | Perception | OCR text from LCD/OLED/e-ink display — Tesseract + Claude fallback |
+| `detect_jumper` | Perception | Detect jumper/shunt presence or absence on header pins |
+| `check_board` | Perception | PCB presence detection and orientation check |
+| `detect_motion` | Perception | Monitor for motion events — detect resets, relay actuation |
+| `read_qr_code` | Perception | Decode QR codes and barcodes — board serial, revision labels |
 
 ---
 
@@ -522,8 +527,13 @@ CONFIGURE
   adjust_image(br, co, sat, sh)              → image transforms (persistent)
   set_focus("auto" | "manual")               → AVFoundation focus mode
 
-CAPTURE
+CAPTURE & ANALYSIS
   capture_frame()                             → raw JPEG, settings applied
   analyze_frame(prompt)                       → Claude vision Q&A
   detect_led_state(region_hint)              → OpenCV LED detection + fallback
+  read_display(region_hint)                  → OCR display text + fallback
+  detect_jumper(region_hint, expected)       → jumper present/absent check
+  check_board()                               → PCB presence + orientation
+  detect_motion(duration_s, sensitivity)     → motion / reset event detection
+  read_qr_code()                             → QR code / barcode decode
 ```

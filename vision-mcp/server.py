@@ -446,5 +446,393 @@ def detect_led_state(camera_index: int = -1, region_hint: str = "") -> str:
         return f"{opencv_text}\n[Fallback failed: {e}]"
 
 
+# ── Board debugging tools ─────────────────────────────────────────────────────
+
+@mcp.tool()
+def read_display(
+    region_hint: str = "",
+    camera_index: int = -1,
+) -> str:
+    """
+    Read text from an LCD, OLED, or e-ink display on the board using OCR.
+    Uses Tesseract OCR with adaptive preprocessing. Falls back to Claude vision
+    if OCR yields no text and ANTHROPIC_API_KEY is set.
+
+    Args:
+        region_hint: Crop hint to isolate the display area, e.g. 'top-left', 'bottom'.
+        camera_index: Camera index. -1 = use current setting.
+    """
+    if camera_index >= 0:
+        _state["camera_index"] = camera_index
+    try:
+        frame = _get_processed_frame()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    try:
+        import pytesseract
+    except ImportError:
+        return "ERROR: pytesseract not installed. Run: pip install pytesseract"
+
+    h, w = frame.shape[:2]
+    roi = frame
+    if region_hint:
+        hint = region_hint.lower()
+        if   "top"    in hint and "left"  in hint: roi = frame[:h//2, :w//2]
+        elif "top"    in hint and "right" in hint: roi = frame[:h//2, w//2:]
+        elif "bottom" in hint and "left"  in hint: roi = frame[h//2:, :w//2]
+        elif "bottom" in hint and "right" in hint: roi = frame[h//2:, w//2:]
+        elif "top"    in hint: roi = frame[:h//2, :]
+        elif "bottom" in hint: roi = frame[h//2:, :]
+        elif "left"   in hint: roi = frame[:, :w//2]
+        elif "right"  in hint: roi = frame[:, w//2:]
+
+    # Upscale small ROIs for better OCR accuracy
+    rh, rw = roi.shape[:2]
+    if rw < 640:
+        scale = 640 / rw
+        roi = cv2.resize(roi, (int(rw * scale), int(rh * scale)), interpolation=cv2.INTER_CUBIC)
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+    # Try multiple preprocessing strategies, pick the one with most text
+    results = []
+    configs = [
+        ("adaptive_thresh", cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                                   cv2.THRESH_BINARY, 11, 2)),
+        ("otsu",            cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
+        ("inverted_otsu",   cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]),
+    ]
+    for label, processed in configs:
+        text = pytesseract.image_to_string(processed, config="--psm 6").strip()
+        if text:
+            results.append((label, text))
+
+    if results:
+        # Return the longest result (most text extracted)
+        best_label, best_text = max(results, key=lambda x: len(x[1]))
+        return f"OCR ({best_label}):\n{best_text}"
+
+    # Fallback to Claude vision
+    if not _api_available():
+        return "OCR: No text detected. ANTHROPIC_API_KEY not set — cannot use vision fallback."
+    try:
+        jpeg = _bgr_to_jpeg(frame)
+        b64  = _frame_to_base64(jpeg)
+        hint_str = f" Focus on the {region_hint}." if region_hint else ""
+        prompt = ("Read all text visible on any display (LCD, OLED, e-ink, 7-segment) "
+                  "on this hardware board. Return the exact text shown." + hint_str)
+        msg = _get_client().messages.create(
+            model="claude-opus-4-6", max_tokens=512,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
+                {"type": "text",  "text": prompt},
+            ]}],
+        )
+        return f"OCR: No text detected.\n[Claude vision fallback:]\n{msg.content[0].text}"
+    except Exception as e:
+        return f"OCR: No text detected. Fallback failed: {e}"
+
+
+@mcp.tool()
+def detect_jumper(
+    region_hint: str = "",
+    expected: str = "present",
+    camera_index: int = -1,
+) -> str:
+    """
+    Detect whether a jumper (shunt) is installed on a header pin.
+    Uses blob detection to find small rectangular plastic objects in the region.
+
+    Args:
+        region_hint: Where to look, e.g. 'top-left', 'center'. Defaults to full frame.
+        expected:    'present' or 'absent' — what you expect. Used to flag mismatches.
+        camera_index: Camera index. -1 = use current setting.
+    """
+    if camera_index >= 0:
+        _state["camera_index"] = camera_index
+    try:
+        frame = _get_processed_frame()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    h, w = frame.shape[:2]
+    roi, roi_offset = frame, (0, 0)
+    if region_hint:
+        hint = region_hint.lower()
+        if   "top"    in hint and "left"  in hint: roi = frame[:h//2, :w//2]
+        elif "top"    in hint and "right" in hint: roi, roi_offset = frame[:h//2, w//2:], (w//2, 0)
+        elif "bottom" in hint and "left"  in hint: roi, roi_offset = frame[h//2:, :w//2], (0, h//2)
+        elif "bottom" in hint and "right" in hint: roi, roi_offset = frame[h//2:, w//2:], (w//2, h//2)
+        elif "top"    in hint: roi = frame[:h//2, :]
+        elif "bottom" in hint: roi, roi_offset = frame[h//2:, :], (0, h//2)
+        elif "left"   in hint: roi = frame[:, :w//2]
+        elif "right"  in hint: roi, roi_offset = frame[:, w//2:], (w//2, 0)
+
+    # Jumpers are small, opaque, roughly rectangular plastic blobs
+    # Common colors: black, red, yellow, green, blue
+    # Strategy: find compact, roughly rectangular contours in typical jumper size range
+
+    gray    = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges   = cv2.Canny(blurred, 30, 100)
+    kernel  = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    closed  = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+
+    rh, rw  = roi.shape[:2]
+    # Jumper size heuristic: 0.3%–3% of ROI area
+    min_area = rh * rw * 0.003
+    max_area = rh * rw * 0.03
+
+    candidates = []
+    for cnt in cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]:
+        area = cv2.contourArea(cnt)
+        if not (min_area <= area <= max_area):
+            continue
+        x, y, bw, bh = cv2.boundingRect(cnt)
+        aspect = max(bw, bh) / max(min(bw, bh), 1)
+        # Jumpers are roughly square to 2:1 aspect
+        if aspect > 3.5:
+            continue
+        rect_fill = area / (bw * bh + 1e-6)
+        if rect_fill < 0.4:
+            continue
+        cx = x + bw // 2 + roi_offset[0]
+        cy = y + bh // 2 + roi_offset[1]
+        pos_x = "left" if cx < w // 3 else ("center" if cx < 2 * w // 3 else "right")
+        pos_y = "top"  if cy < h // 3 else ("middle"  if cy < 2 * h // 3 else "bottom")
+        # Sample dominant color of the blob
+        mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        cv2.drawContours(mask, [cnt], -1, 255, -1)
+        mean_bgr = cv2.mean(roi, mask=mask)[:3]
+        candidates.append({
+            "position": f"{pos_y}-{pos_x}",
+            "area": int(area),
+            "color_bgr": tuple(int(v) for v in mean_bgr),
+        })
+
+    detected = len(candidates) > 0
+    status   = "PRESENT" if detected else "ABSENT"
+    mismatch = (expected == "present" and not detected) or (expected == "absent" and detected)
+    flag     = " ⚠️  MISMATCH — check before proceeding" if mismatch else ""
+
+    lines = [f"Jumper: {status}{flag}"]
+    for i, c in enumerate(candidates, 1):
+        b, g, r = c["color_bgr"]
+        lines.append(f"  {i}. position={c['position']}  area={c['area']}px²  "
+                     f"color≈RGB({r},{g},{b})")
+    if not candidates:
+        lines.append("  No jumper-like objects found in the search region.")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def check_board(camera_index: int = -1) -> str:
+    """
+    Detect whether a PCB is present in the camera frame and estimate its orientation.
+    Uses PCB-green color detection and largest-contour angle analysis.
+    No reference image required.
+
+    Args:
+        camera_index: Camera index. -1 = use current setting.
+    """
+    if camera_index >= 0:
+        _state["camera_index"] = camera_index
+    try:
+        frame = _get_processed_frame()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    h, w = frame.shape[:2]
+    hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # PCB green / FR4 green color range in HSV
+    pcb_lower = np.array([35,  30,  30])
+    pcb_upper = np.array([90, 255, 200])
+    mask = cv2.inRange(hsv, pcb_lower, pcb_upper)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    mask   = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel)
+
+    pcb_pixel_fraction = np.count_nonzero(mask) / (h * w)
+
+    if pcb_pixel_fraction < 0.02:
+        return ("Board: NOT DETECTED\n"
+                f"PCB-green coverage: {pcb_pixel_fraction:.1%} (threshold: 2%)\n"
+                "Ensure the board is in frame and well-lit.")
+
+    # Find largest contour to estimate orientation
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return f"Board: PRESENT (coverage {pcb_pixel_fraction:.1%}) — orientation unknown"
+
+    largest = max(contours, key=cv2.contourArea)
+    rect    = cv2.minAreaRect(largest)
+    angle   = rect[2]  # degrees, -90 to 0
+    # Normalize to 0–90° tilt from horizontal
+    if angle < -45:
+        angle += 90
+    tilt = abs(angle)
+
+    orientation = "aligned (< 5°)" if tilt < 5 else \
+                  f"slightly tilted ({tilt:.1f}°)" if tilt < 15 else \
+                  f"tilted ({tilt:.1f}°) — reposition for best LED detection"
+
+    bx, by, bw_box, bh_box = cv2.boundingRect(largest)
+    center_x = bx + bw_box // 2
+    center_y = by + bh_box // 2
+    pos_x = "left" if center_x < w // 3 else ("center" if center_x < 2 * w // 3 else "right")
+    pos_y = "top"  if center_y < h // 3 else ("middle"  if center_y < 2 * h // 3 else "bottom")
+
+    return (f"Board: PRESENT\n"
+            f"  PCB-green coverage : {pcb_pixel_fraction:.1%}\n"
+            f"  Bounding box       : {bw_box}×{bh_box}px at {pos_y}-{pos_x}\n"
+            f"  Orientation        : {orientation}")
+
+
+@mcp.tool()
+def detect_motion(
+    duration_s: float = 3.0,
+    sensitivity: int = 20,
+    camera_index: int = -1,
+) -> str:
+    """
+    Monitor the camera for motion over a time window.
+    Useful for detecting board resets (brief flicker), relay actuation,
+    or unexpected physical disturbances.
+
+    Args:
+        duration_s:  How long to monitor in seconds. Default 3.0.
+        sensitivity: Pixel difference threshold (1–100). Lower = more sensitive. Default 20.
+        camera_index: Camera index. -1 = use current setting.
+    """
+    import time
+
+    if camera_index >= 0:
+        _state["camera_index"] = camera_index
+
+    cap = cv2.VideoCapture(_state["camera_index"])
+    if not cap.isOpened():
+        return f"ERROR: Cannot open camera index {_state['camera_index']}"
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  _state["width"])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _state["height"])
+    # Warm up
+    for _ in range(3):
+        cap.read()
+
+    frames_captured = 0
+    motion_events   = []
+    peak_diff       = 0.0
+    prev_gray       = None
+    deadline        = time.time() + duration_s
+
+    while time.time() < deadline:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frames_captured += 1
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (21, 21), 0)
+
+        if prev_gray is not None:
+            diff  = cv2.absdiff(prev_gray, gray)
+            thresh = cv2.threshold(diff, sensitivity, 255, cv2.THRESH_BINARY)[1]
+            changed_fraction = np.count_nonzero(thresh) / thresh.size
+            peak_diff = max(peak_diff, changed_fraction)
+
+            if changed_fraction > 0.01:   # >1% of frame changed
+                elapsed = duration_s - (deadline - time.time())
+                motion_events.append({
+                    "t_s": round(elapsed, 2),
+                    "fraction": round(changed_fraction, 3),
+                    "magnitude": "large" if changed_fraction > 0.1 else
+                                 "medium" if changed_fraction > 0.03 else "small",
+                })
+        prev_gray = gray
+
+    cap.release()
+
+    lines = [
+        f"Motion monitoring: {duration_s:.1f}s  frames={frames_captured}  "
+        f"sensitivity={sensitivity}  peak_diff={peak_diff:.1%}"
+    ]
+
+    if not motion_events:
+        lines.append("Result: NO MOTION DETECTED — scene was stable.")
+    else:
+        reset_likely = any(e["magnitude"] == "large" for e in motion_events)
+        lines.append(f"Result: {len(motion_events)} motion event(s) detected"
+                     + (" — possible board RESET (large frame change)" if reset_likely else ""))
+        for e in motion_events:
+            lines.append(f"  t={e['t_s']}s  changed={e['fraction']:.1%}  [{e['magnitude']}]")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def read_qr_code(camera_index: int = -1) -> str:
+    """
+    Detect and decode QR codes and barcodes in the camera frame.
+    Useful for reading board serial numbers, hardware revisions, or firmware labels.
+    Uses OpenCV's built-in QR detector (no external library required).
+
+    Args:
+        camera_index: Camera index. -1 = use current setting.
+    """
+    if camera_index >= 0:
+        _state["camera_index"] = camera_index
+    try:
+        frame = _get_processed_frame()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    results = []
+
+    # ── Standard QR detector ─────────────────────────────────────────────────
+    qr = cv2.QRCodeDetector()
+    data, points, _ = qr.detectAndDecode(gray)
+    if data:
+        results.append(("QR", data))
+
+    # ── Multi-QR detector (OpenCV 4.5+) ──────────────────────────────────────
+    try:
+        mqr   = cv2.QRCodeDetectorAruco()
+        texts, pts, _ = mqr.detectAndDecodeMulti(gray)
+        for t in (texts or []):
+            if t and t != data:
+                results.append(("QR", t))
+    except Exception:
+        pass
+
+    # ── WeChatQR (better detection of small/damaged codes, OpenCV contrib) ───
+    try:
+        wechat = cv2.wechat_qrcode_WeChatQRCode()
+        texts, _ = wechat.detectAndDecode(gray)
+        for t in (texts or []):
+            if t and t not in [r[1] for r in results]:
+                results.append(("WeChatQR", t))
+    except Exception:
+        pass
+
+    if not results:
+        # Try with preprocessed image (higher contrast)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        data2, _, _ = qr.detectAndDecode(binary)
+        if data2:
+            results.append(("QR (enhanced)", data2))
+
+    if not results:
+        return ("No QR code or barcode detected.\n"
+                "Tips: ensure good lighting, code is fully in frame, "
+                "try set_ptz(zoom=2.0) to enlarge the code.")
+
+    lines = [f"Detected {len(results)} code(s):"]
+    for i, (kind, text) in enumerate(results, 1):
+        lines.append(f"  {i}. [{kind}] {text}")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     mcp.run()

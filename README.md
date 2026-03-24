@@ -52,7 +52,7 @@ Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). E
 |--------|------|---------|---------|
 | `serial-mcp` | :8001 | `pyserial` (Python) · `serialport` (Rust) | Read UART logs, detect anomalies (`HardFault`, `Panic`, `Watchdog`) |
 | `jtag-mcp` | :8002 | `pyocd` (Python) · `probe-rs` (Rust) | Call stack, register/memory read, HardFault semantic diagnosis |
-| `vision-mcp` | stdio | `opencv-python` · `pyobjc-AVFoundation` · `anthropic` | Frame capture, software PTZ, image adjustment, LED detection (OpenCV-first + Claude vision fallback) |
+| `vision-mcp` | stdio | `opencv-python` · `pytesseract` · `pyobjc-AVFoundation` · `anthropic` | Frame capture, software PTZ, image adjustment, LED detection, display OCR, jumper detection, board presence, motion/reset detection, QR code reading |
 | `ppk2-mcp` | stdio | `ppk2` (Rust) | Current measurement, power state profiling, pin-triggered capture, battery life estimate |
 | `build-flash-mcp` | :8005 | `subprocess` (Python) · `std::process::Command` (Rust) | Firmware build/flash/erase via CMake + OpenOCD |
 | `power-control-mcp` | :8006 | `pyusb` / `gpiozero` | Hard reset, power cycle via USB relay |

@@ -18,7 +18,7 @@ and validate physical embedded hardware via MCP servers.
 | `jtag-mcp` | `halt_cpu`, `resume_cpu`, `read_registers`, `read_memory`, `read_call_stack`, `diagnose_hardfault` | `jtag-mcp-rs` |
 | `build-flash-mcp` | `build_firmware`, `clean_build`, `get_build_size`, `flash_firmware` | `build-flash-mcp-rs` |
 | `ppk2-mcp` | `find_ppk2`, `measure_current`, `profile_power_states`, `measure_with_pin_trigger`, `estimate_battery_life`, `set_dut_power`, `get_metadata` | `ppk2-mcp-rs` |
-| `vision-mcp` | `list_cameras`, `get_camera_info`, `set_resolution`, `set_ptz`, `adjust_image`, `set_focus`, `capture_frame`, `analyze_frame`, `detect_led_state` | `vision-mcp/server.py` |
+| `vision-mcp` | `list_cameras`, `get_camera_info`, `set_resolution`, `set_ptz`, `adjust_image`, `set_focus`, `capture_frame`, `analyze_frame`, `detect_led_state`, `read_display`, `detect_jumper`, `check_board`, `detect_motion`, `read_qr_code` | `vision-mcp/server.py` |
 
 ## Target Hardware
 
