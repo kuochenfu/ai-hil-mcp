@@ -1,6 +1,6 @@
 # AI-HIL User Manual
 
-**Version:** 1.6 · 2026-03-23
+**Version:** 1.7 · 2026-03-25
 
 > Complete guide to using Claude Code as an AI-hardware-in-the-loop embedded systems engineer.
 
@@ -19,6 +19,9 @@ Once the MCP servers are running, Claude Code can:
 | Measure current draw | `ppk2-mcp` | "Avg 11 mA, p99 22 mA — consistent with LoRa TX" |
 | Profile power states | `ppk2-mcp` | "93% active, 7% TX burst — sleep state missing" |
 | Estimate battery life | `ppk2-mcp` | "181 hours on 2000 mAh at measured draw" |
+| Capture camera frame | `vision-mcp` | Frame with software PTZ and image adjustments applied |
+| Detect LED states | `vision-mcp` | "GREEN ON (middle-center), BLUE ON (top-right)" |
+| Visual board analysis | `vision-mcp` | "Board is powered, no fault LED visible, LCD shows PING" |
 
 ---
 
@@ -124,6 +127,32 @@ Anomaly detection automatically flags: `HardFault`, `panic`, `assert`, `watchdog
 | `get_metadata(port)` | Read calibration, VDD, hardware version |
 
 See [user-manual-ppk2.md](user-manual-ppk2.md) for full PPK2 setup and usage details.
+
+---
+
+### `vision-mcp` — Camera & Visual Inspection
+
+| Tool | Description |
+|------|-------------|
+| `list_cameras` | Enumerate camera indices and resolutions |
+| `get_camera_info` | Show all current settings (PTZ, adjustments, resolution) |
+| `set_resolution(width, height)` | Switch capture resolution |
+| `set_ptz(pan, tilt, zoom)` | Software ePTZ — crop-based, persistent across captures |
+| `adjust_image(brightness, contrast, saturation, sharpness)` | Post-capture transforms — persistent |
+| `set_focus(mode)` | `"auto"` or `"manual"` focus via AVFoundation |
+| `capture_frame` | Raw JPEG with current PTZ and adjustments applied |
+| `analyze_frame(prompt)` | Claude vision API analysis |
+| `detect_led_state(region_hint)` | OpenCV LED detection (+ Claude vision fallback if confidence < 60%) |
+
+**Defaults:** camera index 0, 1920×1080, no PTZ, no image adjustments.
+
+**Notes:**
+- All PTZ and image adjustment settings are persistent — set once, applied to all subsequent captures
+- `detect_led_state` never requires an API key when LEDs are well-lit (OpenCV confidence ≥ 60%)
+- `analyze_frame` requires `ANTHROPIC_API_KEY` in the environment
+- macOS camera permission must be granted to the terminal app
+
+See [user-manual-vision-mcp.md](user-manual-vision-mcp.md) for full setup, workflows, and troubleshooting.
 
 ---
 
@@ -323,4 +352,15 @@ POWER
   profile_power_states(port, mv, secs) → histogram by power mode
   measure_with_pin_trigger(port, pin)  → event-gated power
   estimate_battery_life(port, mah)     → runtime estimate
+
+VISION
+  list_cameras()                       → available camera indices
+  get_camera_info()                    → all current settings
+  set_resolution(w, h)                 → switch capture resolution
+  set_ptz(pan, tilt, zoom)            → software ePTZ (persistent)
+  adjust_image(br, co, sat, sh)       → image transforms (persistent)
+  set_focus("auto"|"manual")          → AVFoundation focus mode
+  capture_frame()                      → raw JPEG, settings applied
+  analyze_frame(prompt)               → Claude vision Q&A
+  detect_led_state(region_hint)       → OpenCV LED detection + fallback
 ```

@@ -285,6 +285,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 |----------|-------------|
 | [`doc/user-manual.md`](doc/user-manual.md) | Complete user manual — all MCP servers, SOPs, safety constraints, quick reference |
 | [`doc/user-manual-ppk2.md`](doc/user-manual-ppk2.md) | PPK2 power profiling deep-dive — hardware setup, all tools, workflows, troubleshooting |
+| [`doc/user-manual-vision-mcp.md`](doc/user-manual-vision-mcp.md) | vision-mcp deep-dive — camera setup, PTZ, image adjustments, LED detection, workflows |
 | [`doc/AIHIL_embedded_dev_automation.md`](doc/AIHIL_embedded_dev_automation.md) | Full architectural specification with diagrams and design rationale |
 
 ---
