@@ -1,6 +1,6 @@
 # AI-HIL User Manual
 
-**Version:** 1.7 · 2026-03-25
+**Version:** 1.8 · 2026-03-29
 
 > Complete guide to using Claude Code as an AI-hardware-in-the-loop embedded systems engineer.
 
@@ -13,6 +13,7 @@ Once the MCP servers are running, Claude Code can:
 | Capability | MCP Server | Example |
 |------------|------------|---------|
 | Read UART serial logs and detect faults | `serial-mcp` | "HardFault detected in RX callback" |
+| Monitor multiple boards simultaneously | `serial-mcp` | Interleaved timestamped output from all ports in one call |
 | Halt CPU, read registers, diagnose crashes | `jtag-mcp` | "PRECISERR at 0x60000000 — invalid memory read" |
 | Set hardware breakpoints and watchpoints | `jtag-mcp` | Halt CPU exactly when `uwTick` is written |
 | Build and flash firmware | `build-flash-mcp` | CMake + OpenOCD, dual-core support |
@@ -65,13 +66,16 @@ ppk2-mcp        /path/to/ppk2-mcp-rs        ✓ Connected
 
 | Tool | Description |
 |------|-------------|
-| `list_serial_ports` | List all connected serial ports |
-| `read_serial_log(port, baud, lines, timeout_s)` | Read N lines with anomaly detection |
-| `send_serial_command(port, baud, command)` | Send a command and read response |
+| `list_serial_ports` | List all connected serial ports with USB serial numbers |
+| `list_boards` | Show boards configured in `devices.toml` with their aliases |
+| `read_serial_log(port, lines, timeout_s, timestamps)` | Read N lines with anomaly detection; accepts alias or raw path |
+| `send_serial_command(port, command)` | Send a command and read response; accepts alias or raw path |
+| `read_multi_log(ports, lines, timeout_s)` | Read multiple ports concurrently; interleaved timestamped output |
+| `wait_for_pattern(ports, pattern, timeout_s)` | Monitor ports and return on first pattern match; supports `\|` OR |
 
 Anomaly detection automatically flags: `HardFault`, `panic`, `assert`, `watchdog`, `stack overflow`.
 
-**Defaults for STM32WL55:** `port="/dev/cu.usbmodem1303"`, `baud=115200`
+**Board aliases:** configure `devices.toml` (path set via `SERIAL_MCP_CONFIG` in `.mcp.json`), then use `board1/log`, `board1/shell` etc. instead of raw port paths. See [user-manual-serial-mcp.md](user-manual-serial-mcp.md) for full setup and examples.
 
 ---
 
@@ -325,10 +329,13 @@ If `< 1 µA` bucket is empty, the MCU is not entering low-power mode.
 ```
 DISCOVER
   find_ppk2()                          → PPK2 control port
-  list_serial_ports()                  → all serial ports
+  list_serial_ports()                  → all serial ports + USB serial numbers
+  list_boards()                        → configured board aliases
 
 OBSERVE
-  read_serial_log(port, baud, lines)   → UART log + anomaly flags
+  read_serial_log(port, lines)         → UART log + anomaly flags (alias or raw path)
+  read_multi_log(ports, lines)         → concurrent multi-board log, interleaved + timestamped
+  wait_for_pattern(ports, pattern)     → block until pattern matches on any port
   read_registers()                     → CPU register snapshot
   read_memory(address, length)         → raw memory bytes
   read_call_stack()                    → exception frame

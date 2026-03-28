@@ -1,0 +1,16 @@
+# serial-mcp device registry
+# Set SERIAL_MCP_CONFIG=/path/to/devices.toml in .mcp.json env to load this file.
+#
+# Aliases: use "board1/log", "board1/shell", "board2/log", "board2/shell" in all tools.
+
+[board.board1]
+description = "Espressif board 1"
+log_port    = "/dev/cu.usbmodem11201"   # USB JTAG/serial debug unit (primary console)
+shell_port  = "/dev/cu.usbserial-1110"  # CP2102N UART bridge (secondary UART)
+baud        = 115200
+
+[board.board2]
+description = "Espressif board 2"
+log_port    = "/dev/cu.usbmodem11401"   # USB JTAG/serial debug unit (primary console)
+shell_port  = "/dev/cu.usbserial-1130"  # CP2102N UART bridge (secondary UART)
+baud        = 115200

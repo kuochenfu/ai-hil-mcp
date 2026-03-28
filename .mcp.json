@@ -4,7 +4,9 @@
       "type": "stdio",
       "command": "/Users/chenfu/Labs/ai-hil-mcp/serial-mcp-rs/target/release/serial-mcp-rs",
       "args": [],
-      "env": {}
+      "env": {
+        "SERIAL_MCP_CONFIG": "/Users/chenfu/Labs/ai-hil-mcp/devices.toml"
+      }
     },
     "serial-mcp-py": {
       "type": "stdio",
