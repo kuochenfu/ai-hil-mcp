@@ -1,6 +1,6 @@
 # AI-HIL User Manual
 
-**Version:** 1.8 · 2026-03-29
+**Version:** 1.9 · 2026-03-29
 
 > Complete guide to using Claude Code as an AI-hardware-in-the-loop embedded systems engineer.
 
@@ -83,23 +83,31 @@ Anomaly detection automatically flags: `HardFault`, `panic`, `assert`, `watchdog
 
 | Tool | Category | Description |
 |------|----------|-------------|
-| `halt_cpu` | Control | Halt CPU, return PC |
-| `resume_cpu` | Control | Resume execution |
-| `reset_target` | Control | Soft reset, reads post-reset PC |
-| `read_registers` | Perception | All core registers + xPSR + CONTROL/FAULTMASK |
-| `read_memory(address, length)` | Perception | Read bytes from any address |
-| `read_call_stack` | Perception | Exception frame at SP |
-| `diagnose_hardfault` | Perception | Decode HFSR/CFSR/BFAR/MMFAR — semantic fault report |
-| `write_memory(address, hex_bytes)` | Action | Write to any address (fault injection, live patches) |
-| `set_breakpoint(address)` | Action | Hardware breakpoint via FPB |
-| `clear_breakpoint(address)` | Action | Remove FPB breakpoint |
-| `set_watchpoint(address, kind)` | Action | DWT data watchpoint: `"read"`, `"write"`, `"read_write"` |
-| `clear_watchpoint(address)` | Action | Remove DWT watchpoint |
+| `list_probes` | Discovery | Enumerate all connected debug probes with serial numbers |
+| `list_boards` | Discovery | Show boards configured in `devices.toml` with probe and target info |
+| `halt_cpu(board)` | Control | Halt CPU, return PC; accepts optional board alias |
+| `resume_cpu(board)` | Control | Resume execution; accepts optional board alias |
+| `reset_target(board)` | Control | Soft reset, reads post-reset PC; reliable on all architectures |
+| `read_registers(board)` | Perception | PC/SP/LR on all targets; full Cortex-M set on CM targets |
+| `read_memory(address, length, board)` | Perception | Read bytes from any address |
+| `read_call_stack(board)` | Perception | Cortex-M exception frame at SP (CM only) |
+| `diagnose_hardfault(board)` | Perception | Decode HFSR/CFSR/BFAR/MMFAR (Cortex-M only) |
+| `write_memory(address, data, board)` | Action | Write to any address (fault injection, live patches) |
+| `set_breakpoint(address, board)` | Action | Hardware breakpoint via FPB |
+| `clear_breakpoint(address, board)` | Action | Remove FPB breakpoint (Cortex-M only) |
+| `set_watchpoint(address, kind, board)` | Action | DWT data watchpoint: `"read"`, `"write"`, `"read_write"` (CM only) |
+| `clear_watchpoint(address, board)` | Action | Remove DWT watchpoint (Cortex-M only) |
+
+**Board aliases:** configure `probe_serial` and `target` in `devices.toml` (path set via `JTAG_MCP_CONFIG` in `.mcp.json`), then pass `board="board1"` to any tool. Without a `board` param, connects to first available probe with default target.
+
+**Architecture awareness:** Cortex-M-only tools (`diagnose_hardfault`, `read_call_stack`, DWT watchpoints, FPB `clear_breakpoint`) return a clear guidance message when called on non-Cortex-M targets (e.g. ESP32). Basic tools work on all architectures.
 
 **Notes:**
-- FPB breakpoints are cleared on each new JTAG session — set and use in the same conversation turn
-- DWT watchpoints persist across sessions (raw register writes, not probe-rs managed)
-- Watchdog timeout is 2s — do not halt CPU for more than 1.5s during live diagnosis
+- ESP32: `resume_cpu` may return Xtensa error after halt — use `reset_target` instead
+- Watchdog timeout is typically 2s — do not halt CPU for more than 1.5s during live diagnosis
+- DWT watchpoints persist across sessions (raw register writes); FPB breakpoints are cleared on session open
+
+See [user-manual-jtag-mcp.md](user-manual-jtag-mcp.md) for full setup, multi-board SOP, and examples.
 
 ---
 

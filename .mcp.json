@@ -34,7 +34,9 @@
       "type": "stdio",
       "command": "/Users/chenfu/Labs/ai-hil-mcp/jtag-mcp-rs/target/release/jtag-mcp-rs",
       "args": [],
-      "env": {}
+      "env": {
+        "JTAG_MCP_CONFIG": "/Users/chenfu/Labs/ai-hil-mcp/devices.toml"
+      }
     },
     "jtag-mcp-py": {
       "type": "stdio",
