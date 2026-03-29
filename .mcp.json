@@ -20,7 +20,9 @@
       "type": "stdio",
       "command": "/Users/chenfu/Labs/ai-hil-mcp/build-flash-mcp-rs/target/release/build-flash-mcp-rs",
       "args": [],
-      "env": {}
+      "env": {
+        "BUILD_FLASH_MCP_CONFIG": "/Users/chenfu/Labs/ai-hil-mcp/devices.toml"
+      }
     },
     "build-flash-mcp-py": {
       "type": "stdio",

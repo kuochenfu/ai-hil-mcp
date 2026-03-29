@@ -1,6 +1,6 @@
 # AI-HIL Embedded Dev Automation
 
-**Version:** v1.9 · 2026-03-29
+**Version:** v2.0 · 2026-03-29
 
 > Give a single engineer the development, debugging, and verification capacity of a 3–5 person hardware team — through AI-assisted closed-loop automation.
 
@@ -54,7 +54,7 @@ Servers are built with **FastMCP (Python)** or **Rust** (`rmcp` + `probe-rs`). E
 | `jtag-mcp` | stdio | `pyocd` (Python) · `probe-rs` (Rust) | Multi-board probe selection via `devices.toml`; halt/resume/reset; registers/memory; Cortex-M fault diagnosis; architecture-aware guards for non-CM targets |
 | `vision-mcp` | stdio | `opencv-python` · `pytesseract` · `pyobjc-AVFoundation` · `anthropic` | Frame capture, software PTZ, image adjustment, LED detection, display OCR, jumper detection, board presence, motion/reset detection, QR code reading |
 | `ppk2-mcp` | stdio | `ppk2` (Rust) | Current measurement, power state profiling, pin-triggered capture, battery life estimate |
-| `build-flash-mcp` | :8005 | `subprocess` (Python) · `std::process::Command` (Rust) | Firmware build/flash/erase via CMake + OpenOCD |
+| `build-flash-mcp` | stdio | `subprocess` (Python) · `std::process::Command` (Rust) | Firmware build/flash; `devices.toml` project registry; `board` param on all tools; flash tool abstraction (openocd/esptool/idf/probe-rs); arch-aware size tool |
 | `power-control-mcp` | :8006 | `pyusb` / `gpiozero` | Hard reset, power cycle via USB relay |
 | `sdr-mcp` *(Phase 4)* | :8007 | `pyrtlsdr` | RF spectrum scan, noise floor, emission detection |
 | `thermal-mic-mcp` *(Phase 4)* | :8008 | `pyaudio` + FLIR SDK | Thermal imaging, coil whine detection |
@@ -214,7 +214,7 @@ Goal: AI "sees" hardware faults via JTAG + Power + Vision
 | 2.2 | HardFault semantic parser | ✅ | **Done** — fault injection test passed (PRECISERR @ 0x60000000) |
 | 2.2b | JTAG MCP Server — Rust rewrite (`probe-rs` + `rmcp`) | ✅ | **Done** — all 12 tools hardware-verified on STM32WL55. Active debugging confirmed: DWT watchpoint halted CPU in `HAL_IncTick` writing `uwTick`; FPB breakpoint halted CPU at exact target address. `clear_breakpoint` uses raw FPB scan (probe-rs clears FPB on session open). v2.0: multi-board probe selection via `devices.toml`, optional `board` param on all tools, architecture-aware guards for non-Cortex-M targets — verified on 2× ESP32-S3 boards |
 | 2.2c | Serial MCP Server — Rust rewrite (`serialport` + `rmcp`) | ✅ | **Done** — hardware-verified on STM32WL55 (LoRa PING traffic captured). v2.0: device registry (`devices.toml`), board aliases, `read_multi_log`, `wait_for_pattern`, timestamps, USB serial numbers — verified on 2× Espressif boards (4 ports) |
-| 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — hardware-verified: build → flash → serial confirmed on STM32WL55 |
+| 2.2d | Build & Flash MCP Server — Rust rewrite (`std::process::Command` + `rmcp`) | ✅ | **Done** — hardware-verified: build → flash → serial confirmed on STM32WL55. v2.0: `devices.toml` project registry, `board` param on all 5 tools (`list_projects` added), flash tool abstraction (openocd/esptool/idf/probe-rs), arch-aware size tool, ESP-IDF support (`build_tool="idf"`, `idf_path`). Binary verified; hardware test on ESP32-S3 boards pending. |
 | 2.3 | PPK2 MCP Server (`ppk2-mcp-rs`) | ✅ | **Done** — 7 tools hardware-verified on STM32WL55: `measure_current`, `profile_power_states`, `measure_with_pin_trigger`, `estimate_battery_life`, `set_dut_power`, `find_ppk2`, `get_metadata`. Dual-port macOS issue resolved. |
 | 2.4 | Vision MCP Server | ✅ | **Done** — 8 tools: `list_cameras`, `get_camera_info`, `set_resolution`, `set_ptz`, `adjust_image`, `set_focus`, `capture_frame`, `analyze_frame`, `detect_led_state`. Software ePTZ + image adjustments via OpenCV; LED detection OpenCV-first with Claude vision fallback. Verified on Logitech MX Brio Ultra 4K. |
 | 2.5 | Multi-sense diagnosis test | ❌ Full hardware | Inject memory overflow bug, AI locates root cause |
@@ -277,7 +277,7 @@ Progress is tracked in [`doc/`](doc/) with daily logs.
 | [2026-03-22](doc/2026-03-22.md) | `jtag-mcp-rs` expanded to full active debugger — all 12 tools hardware-verified; DWT watchpoint halt confirmed in SysTick ISR; FPB cross-session limitation documented |
 | [2026-03-23](doc/2026-03-23.md) | Phase 2.3 complete — `ppk2-mcp-rs` implemented and all 7 tools fully hardware-verified; dual-port macOS issue resolved; active-low button confirmed on pin 0; battery estimate: 6.3 days on 2000 mAh @ 13 mA avg |
 | [2026-03-25](doc/2026-03-25.md) | Phase 2.4 complete — `vision-mcp` implemented with 8 tools; software ePTZ, image adjustments, LED detection (OpenCV-first + Claude vision fallback); verified on Logitech MX Brio Ultra 4K |
-| [2026-03-29](doc/2026-03-29.md) | `serial-mcp` v2.0 — multi-board device registry, named aliases, `read_multi_log`, `wait_for_pattern`, timestamps; `jtag-mcp` v2.0 — probe selection by serial, `board` param on all tools, architecture guards for ESP32; both verified on 2× Espressif boards |
+| [2026-03-29](doc/2026-03-29.md) | `serial-mcp` v2.0 — multi-board device registry, named aliases, `read_multi_log`, `wait_for_pattern`, timestamps; `jtag-mcp` v2.0 — probe selection by serial, `board` param on all tools, architecture guards for ESP32; both verified on 2× Espressif boards; `build-flash-mcp` v2.0 — project registry, flash tool abstraction (openocd/esptool/idf/probe-rs), arch-aware size tool, ESP-IDF support |
 
 ---
 

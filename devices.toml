@@ -1,14 +1,30 @@
-# AI-HIL device registry — shared by serial-mcp and jtag-mcp
-# serial-mcp reads: log_port, shell_port, baud
-# jtag-mcp  reads: probe_serial, target
-# Both read: description
+# AI-HIL device registry — shared by serial-mcp, jtag-mcp, and build-flash-mcp
+# serial-mcp       reads: log_port, shell_port, baud
+# jtag-mcp         reads: probe_serial, target
+# build-flash-mcp  reads: project_path, preset, flash_tool, flash_port, flash_baud,
+#                          openocd_cfg, target, probe_serial
+# All servers read: description
 #
 # Set in .mcp.json:
-#   SERIAL_MCP_CONFIG = /path/to/devices.toml
-#   JTAG_MCP_CONFIG   = /path/to/devices.toml
+#   SERIAL_MCP_CONFIG      = /path/to/devices.toml
+#   JTAG_MCP_CONFIG        = /path/to/devices.toml
+#   BUILD_FLASH_MCP_CONFIG = /path/to/devices.toml
+
+[board.stm32]
+description  = "STM32WL55 NUCLEO-WL55JC1"
+# serial
+log_port     = "/dev/cu.usbmodem1303"
+baud         = 115200
+# jtag — ST-Link V3 embedded on NUCLEO
+target       = "STM32WL55JCIx"
+# build + flash
+project_path = "/Users/chenfu/Labs/stm_projects/synapse-lora/CM4"
+preset       = "Debug"
+flash_tool   = "openocd"
+openocd_cfg  = "target/stm32wlx.cfg"   # relative to openocd scripts dir
 
 [board.board1]
-description  = "Espressif board 1"
+description  = "Espressif S3 Gateway (synapse-s3gw)"
 # serial — USB JTAG/serial debug unit doubles as primary console
 log_port     = "/dev/cu.usbmodem11201"
 shell_port   = "/dev/cu.usbserial-1110"   # CP2102N UART bridge (secondary UART)
@@ -16,9 +32,17 @@ baud         = 115200
 # jtag — same USB interface is the debug probe
 probe_serial = "90:E5:B1:CB:CE:BC"
 target       = "esp32s3"
+# build + flash (preset="" → build dir is build/ directly, not build/Debug)
+project_path = "/Users/chenfu/Labs/esp_projects/synapse-s3/projects/synapse-s3gw"
+preset       = ""
+build_tool   = "idf"
+idf_path     = "/Users/chenfu/Labs/esp_projects/synapse-s3/esp-idf"
+flash_tool   = "esptool"
+flash_port   = "/dev/cu.usbmodem11201"
+flash_baud   = 921600
 
 [board.board2]
-description  = "Espressif board 2"
+description  = "Espressif S3 Node (synapse-s3node)"
 # serial
 log_port     = "/dev/cu.usbmodem11401"
 shell_port   = "/dev/cu.usbserial-1130"
@@ -26,3 +50,11 @@ baud         = 115200
 # jtag
 probe_serial = "90:E5:B1:CB:CD:84"
 target       = "esp32s3"
+# build + flash
+project_path = "/Users/chenfu/Labs/esp_projects/synapse-s3/projects/synapse-s3node"
+preset       = ""
+build_tool   = "idf"
+idf_path     = "/Users/chenfu/Labs/esp_projects/synapse-s3/esp-idf"
+flash_tool   = "esptool"
+flash_port   = "/dev/cu.usbmodem11401"
+flash_baud   = 921600
