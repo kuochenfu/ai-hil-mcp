@@ -418,11 +418,40 @@ fn do_flash_esptool(proj: &ResolvedProject) -> Result<String> {
     file_args.sort_by_key(|(addr, _)| *addr);
     for (addr, file) in &file_args {
         args.push(format!("0x{:x}", addr));
-        args.push(file.clone());
+        args.push(format!("\"{}\"", file)); // quote paths for bash invocation
     }
 
-    let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let r = run(&args_refs, None)?;
+    // If idf_path is set, source export.sh so esptool.py is in PATH
+    let r = if !proj.idf_path.is_empty() {
+        let cmd = format!(
+            "source {}/export.sh 2>/dev/null && {}",
+            proj.idf_path,
+            args.join(" ")
+        );
+        run(&["bash", "-c", &cmd], None)?
+    } else {
+        // Try esptool.py directly (must be in PATH)
+        let args_unquoted: Vec<String> = {
+            // rebuild without quotes for direct exec
+            let mut a: Vec<String> = vec![
+                "esptool.py".to_string(),
+                "--port".to_string(), proj.flash_port.clone(),
+                "--baud".to_string(), proj.flash_baud.to_string(),
+                "write_flash".to_string(),
+            ];
+            if let Some(wf_args) = parsed.get("write_flash_args").and_then(|v| v.as_array()) {
+                for x in wf_args { if let Some(s) = x.as_str() { a.push(s.to_string()); } }
+            }
+            for (addr, file) in &file_args {
+                a.push(format!("0x{:x}", addr));
+                a.push(file.trim_matches('"').to_string());
+            }
+            a
+        };
+        let refs: Vec<&str> = args_unquoted.iter().map(|s| s.as_str()).collect();
+        run(&refs, None)?
+    };
+
     if r.code != 0 {
         return Ok(format!("Flash FAILED (esptool):\n{}", summarise_failure(&r.stdout, &r.stderr)));
     }
